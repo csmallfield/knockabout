@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="MobProfile" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://resources/mob_profile.gd" id="1"]
+[ext_resource type="Script" path="res://resources/physics_stats.gd" id="2"]
+
+[sub_resource type="Resource" id="stats"]
+script = ExtResource("2")
+mass = 100.0
+max_hp = 50.0
+toughness = 2.0
+launch_speed = 200.0
+restitution = 0.35
+drag = 2.5
+breakable = false
+
+[resource]
+script = ExtResource("1")
+stats = SubResource("stats")
+walk_speed = 85.0
+aggro_radius = 280.0
+contact_damage = 10.0
+contact_impulse = 14000.0
+contact_cooldown = 1.0
+radius = 14.0
+color = Color(0.85, 0.5, 0.15, 1)

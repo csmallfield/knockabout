@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="PlayerProfile" format=3 uid="uid://c5avwi5utnqpl"]
+
+[ext_resource type="Script" uid="uid://dxl0akf5dcu0t" path="res://resources/player_profile.gd" id="1"]
+[ext_resource type="Script" uid="uid://bx7a22bqvti26" path="res://resources/physics_stats.gd" id="2"]
+[ext_resource type="Resource" uid="uid://c2t2gjpxeeqy5" path="res://resources/profiles/weapons/club.tres" id="3"]
+
+[sub_resource type="Resource" id="stats"]
+script = ExtResource("2")
+toughness = 8.0
+launch_speed = 280.0
+restitution = 0.3
+
+[resource]
+script = ExtResource("1")
+stats = SubResource("stats")
+weapon = ExtResource("3")

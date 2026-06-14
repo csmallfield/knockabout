@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="DebrisProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/debris_profile.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+mass = 15.0
+hp = 10.0
+radius = 5.0
+color = Color(0.55, 0.5, 0.42, 1)

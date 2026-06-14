@@ -1,0 +1,34 @@
+[gd_resource type="Resource" script_class="PropProfile" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://resources/prop_profile.gd" id="1"]
+[ext_resource type="Script" path="res://resources/physics_stats.gd" id="2"]
+[ext_resource type="Script" path="res://resources/break_payload.gd" id="3"]
+[ext_resource type="Resource" path="res://resources/profiles/debris/debris_medium.tres" id="4"]
+
+[sub_resource type="Resource" id="payload"]
+script = ExtResource("3")
+debris = ExtResource("4")
+count_min = 4
+count_max = 7
+eject_speed_min = 120.0
+eject_speed_max = 300.0
+inherit_factor = 0.4
+
+[sub_resource type="Resource" id="stats"]
+script = ExtResource("2")
+mass = 800.0
+max_hp = 80.0
+toughness = 10.0
+launch_speed = 99999.0
+restitution = 0.4
+drag = 0.0
+breakable = true
+break_payload = SubResource("payload")
+
+[resource]
+script = ExtResource("1")
+stats = SubResource("stats")
+body_type = 1
+radius = 10.0
+rect_size = Vector2(32, 32)
+color = Color(0.55, 0.5, 0.42, 1)
