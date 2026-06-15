@@ -1,8 +1,9 @@
 class_name MobBase
 extends CharacterBody2D
-## One shared structure for all three mobs (GDD §7); behavior differences
-## come from data. AI: IDLE → CHASE → CONTACT_ATTACK, straight-line pursuit.
-## Physics states (BALLISTIC/STUNNED) preempt AI entirely.
+## One shared structure for all three mobs (GDD §7); behaviour differences come
+## from data. The AI lives in a MobBrain component reading a BrainProfile;
+## physics states (BALLISTIC/STUNNED) preempt it entirely — the brain only runs
+## while controllable and is interrupted the moment the body is launched.
 
 @export var profile: MobProfile
 
@@ -17,11 +18,12 @@ var contact_cooldown := 0.8
 var aggro_radius := 280.0
 
 var persist_id := ""   # mobs are not persisted (D3); present for uniformity
+var face_dir := Vector2.DOWN   # set by the brain; applied to the art each tick
 
 var _motion: BallisticMotion
 var _health: HealthComponent
 var _art: PlaceholderArt
-var _attack_timer := 0.0
+var _brain: MobBrain
 var _contact_zone: Area2D
 var _hp_bar: MiniHealthBar
 
@@ -75,41 +77,66 @@ func _ready() -> void:
 
 	add_child(EntityKit.make_hurtbox(radius))
 
-	# Contact-attack zone: slightly larger than the body (§4.2 row 6).
+	# Contact-attack zone: slightly larger than the body (§4.2 row 6). The brain
+	# decides when to strike; this is the volume the strike must overlap.
 	_contact_zone = Area2D.new()
 	_contact_zone.collision_layer = Tuning.L_HITBOX
 	_contact_zone.collision_mask = Tuning.L_HURTBOX
 	_contact_zone.add_child(EntityKit.circle_collider(radius + 6.0))
 	add_child(_contact_zone)
 
+	_brain = MobBrain.new()
+	_brain.setup(self)
+	add_child(_brain)
+
 func _physics_process(delta: float) -> void:
-	_attack_timer = maxf(_attack_timer - delta, 0.0)
 	var intent := Vector2.ZERO
-
 	if _motion.is_controllable():
-		var player := get_tree().get_first_node_in_group("player") as Node2D
-		if player:
-			var to_player := player.global_position - global_position
-			if to_player.length() <= aggro_radius:
-				intent = to_player.normalized() * walk_speed
-				_art.facing = to_player.normalized()
-			if _attack_timer <= 0.0:
-				_try_contact_attack(player)
-		# Stun tint
-		_art.modulate = Color.WHITE
+		intent = _brain.think(delta)
 	else:
-		_art.modulate = Color(0.8, 0.8, 1.0) if _motion.state == BallisticMotion.State.STUNNED else Color.WHITE
-
+		_brain.interrupt()
+	_art.facing = face_dir
+	_refresh_visual()
 	_motion.physics_update(intent, delta)
 
-func _try_contact_attack(player: Node2D) -> void:
+## The brain calls this during a STRIKE; deals one synthetic hit if the player
+## is inside the contact zone. Returns whether it connected.
+func try_strike() -> bool:
+	var player := get_player()
+	if player == null:
+		return false
 	for area in _contact_zone.get_overlapping_areas():
 		if EntityKit.hurtbox_entity(area) == player:
-			_attack_timer = contact_cooldown
 			var dir := (player.global_position - global_position).normalized()
+			if dir == Vector2.ZERO:
+				dir = face_dir
 			ImpactResolver.resolve_synthetic(self, player, dir,
 				contact_impulse, contact_damage, player.global_position)
-			return
+			return true
+	return false
+
+func get_player() -> Node2D:
+	return get_tree().get_first_node_in_group("player") as Node2D
+
+func hp_ratio() -> float:
+	return _health.hp / _health.max_hp if _health.max_hp > 0.0 else 0.0
+
+func _refresh_visual() -> void:
+	# Stun/launch tints win when not AI-controllable.
+	if not _motion.is_controllable():
+		_art.modulate = Color(0.8, 0.8, 1.0) \
+			if _motion.state == BallisticMotion.State.STUNNED else Color.WHITE
+		return
+	match _brain.state:
+		MobBrain.State.WINDUP:
+			# Ramp toward a warning orange so the player can read the swing.
+			_art.modulate = Color.WHITE.lerp(Color(1.0, 0.55, 0.2), _brain.windup_progress())
+		MobBrain.State.STRIKE:
+			_art.modulate = Color(1.0, 0.6, 0.3)
+		MobBrain.State.RECOVER:
+			_art.modulate = Color(0.7, 0.75, 1.0) if _brain.is_charge_stunned() else Color.WHITE
+		_:
+			_art.modulate = Color.WHITE
 
 # ------------------------------------------------------ PhysicsEntity duck-type
 

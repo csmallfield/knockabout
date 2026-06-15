@@ -5,6 +5,7 @@ extends Resource
 @export var stats: PhysicsStats
 
 @export_group("Brain")
+@export var brain: BrainProfile
 @export var walk_speed := 110.0
 @export var aggro_radius := 280.0
 

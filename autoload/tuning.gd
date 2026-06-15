@@ -16,6 +16,9 @@ const STUN_TIME_DEFAULT := 0.35      # s — mob landing stun
 const STUN_TIME_PLAYER := 0.2        # s — player landing stun (shortened, §4.1)
 const STATIC_RESTITUTION := 0.5      # assumed restitution of statless surfaces (tiles)
 
+const MAX_SIMULTANEOUS_ATTACKERS := 2
+const AI_PERCEPTION_INTERVAL := 0.12  # s between LOS/danger raycasts, per mob
+
 # --- Collision layer bit values (GDD §10) ---
 const L_WORLD := 1
 const L_PLAYER := 2

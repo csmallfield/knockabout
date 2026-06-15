@@ -1,7 +1,8 @@
-[gd_resource type="Resource" script_class="MobProfile" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="MobProfile" load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://resources/mob_profile.gd" id="1"]
 [ext_resource type="Script" path="res://resources/physics_stats.gd" id="2"]
+[ext_resource type="Script" path="res://resources/brain_profile.gd" id="3"]
 
 [sub_resource type="Resource" id="stats"]
 script = ExtResource("2")
@@ -11,7 +12,33 @@ toughness = 6.0
 launch_speed = 250.0
 restitution = 0.2
 drag = 3.0
-breakable = false
+
+[sub_resource type="Resource" id="brain"]
+script = ExtResource("3")
+sense_radius = 340.0
+proximity_radius = 120.0
+vision_angle = 110.0
+awareness_gain = 2.5
+awareness_decay = 0.7
+lose_time = 4.0
+leash_radius = 800.0
+engage_distance = 40.0
+engage_tolerance = 16.0
+strafe_speed_factor = 0.45
+aggression = 0.9
+attack_style = 1
+windup_time = 0.45
+recover_time = 0.7
+dash_speed = 300.0
+dash_time = 0.3
+charge_wall_stun = 0.0
+dodge_player_swing = false
+dodge_speed = 360.0
+flee_below_hp = 0.0
+separation_radius = 46.0
+separation_weight = 0.8
+avoid_props = true
+idle_wander = 0.0
 
 [resource]
 script = ExtResource("1")
@@ -23,3 +50,4 @@ contact_impulse = 35000.0
 contact_cooldown = 1.4
 radius = 22.0
 color = Color(0.6, 0.15, 0.15, 1)
+brain = SubResource("brain")

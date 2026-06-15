@@ -179,6 +179,9 @@ func _update_swing(delta: float) -> void:
 	if _swing_frames_left <= 0:
 		_swing_hitbox.set_deferred("monitoring", false)
 
+func is_attacking() -> bool:
+	return _swing_frames_left > 0
+
 func _build_weapon() -> Node2D:
 	var pivot := Node2D.new()
 	pivot.name = "WeaponPivot"

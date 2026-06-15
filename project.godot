@@ -24,6 +24,7 @@ ImpactResolver="*res://autoload/impact_resolver.gd"
 DebrisPool="*res://autoload/debris_pool.gd"
 MapManager="*res://autoload/map_manager.gd"
 Dev="*res://autoload/dev.gd"
+CombatDirector="*res://autoload/combat_director.gd"
 
 [display]
 
