@@ -55,7 +55,7 @@ func activate(pos: Vector2, vel: Vector2, debris: DebrisProfile) -> void:
 	spawn_time = Time.get_ticks_msec() / 1000.0
 	visible = true
 	modulate.a = 1.0
-	freeze = false
+	set_deferred("freeze", false)        # was: freeze = false
 	_shape.set_deferred("disabled", false)
 	sleeping = false
 
