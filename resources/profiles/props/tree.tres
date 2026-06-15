@@ -1,10 +1,11 @@
-[gd_resource type="Resource" script_class="PropProfile" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="PropProfile" format=3 uid="uid://chx6glp0hut2k"]
 
-[ext_resource type="Script" path="res://resources/prop_profile.gd" id="1"]
-[ext_resource type="Script" path="res://resources/physics_stats.gd" id="2"]
-[ext_resource type="Script" path="res://resources/break_payload.gd" id="3"]
+[ext_resource type="Script" uid="uid://v4ppend037fi" path="res://resources/prop_profile.gd" id="1"]
+[ext_resource type="Script" uid="uid://bx7a22bqvti26" path="res://resources/physics_stats.gd" id="2"]
+[ext_resource type="Script" uid="uid://bi04txattx61r" path="res://resources/break_payload.gd" id="3"]
 [ext_resource type="Resource" path="res://resources/profiles/debris/debris_medium.tres" id="4"]
 [ext_resource type="PackedScene" path="res://entities/props/stump.tscn" id="5"]
+
 [sub_resource type="Resource" id="payload"]
 script = ExtResource("3")
 debris = ExtResource("4")
@@ -20,7 +21,6 @@ mass = 600.0
 max_hp = 120.0
 toughness = 12.0
 launch_speed = 99999.0
-restitution = 0.5
 drag = 0.0
 breakable = true
 break_payload = SubResource("payload")
@@ -31,5 +31,4 @@ script = ExtResource("1")
 stats = SubResource("stats")
 body_type = 1
 radius = 14.0
-rect_size = Vector2(0, 0)
 color = Color(0.16, 0.45, 0.2, 1)

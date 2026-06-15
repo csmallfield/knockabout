@@ -1,17 +1,8 @@
-[gd_resource type="Resource" script_class="MobProfile" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="MobProfile" format=3 uid="uid://c4la45rcipmom"]
 
-[ext_resource type="Script" path="res://resources/mob_profile.gd" id="1"]
-[ext_resource type="Script" path="res://resources/physics_stats.gd" id="2"]
-[ext_resource type="Script" path="res://resources/brain_profile.gd" id="3"]
-
-[sub_resource type="Resource" id="stats"]
-script = ExtResource("2")
-mass = 100.0
-max_hp = 50.0
-toughness = 2.0
-launch_speed = 200.0
-restitution = 0.35
-drag = 2.5
+[ext_resource type="Script" uid="uid://chogjnpoplkr0" path="res://resources/mob_profile.gd" id="1"]
+[ext_resource type="Script" uid="uid://bx7a22bqvti26" path="res://resources/physics_stats.gd" id="2"]
+[ext_resource type="Script" uid="uid://cpvffe8iharn2" path="res://resources/brain_profile.gd" id="3"]
 
 [sub_resource type="Resource" id="brain"]
 script = ExtResource("3")
@@ -32,22 +23,25 @@ recover_time = 0.7
 dash_speed = 380.0
 dash_time = 0.45
 charge_wall_stun = 1.4
-dodge_player_swing = false
-dodge_speed = 360.0
-flee_below_hp = 0.0
 separation_radius = 38.0
 separation_weight = 1.0
-avoid_props = true
 idle_wander = 0.1
+
+[sub_resource type="Resource" id="stats"]
+script = ExtResource("2")
+max_hp = 50.0
+toughness = 2.0
+launch_speed = 200.0
+restitution = 0.35
+drag = 2.5
 
 [resource]
 script = ExtResource("1")
 stats = SubResource("stats")
+brain = SubResource("brain")
 walk_speed = 85.0
-aggro_radius = 280.0
 contact_damage = 10.0
 contact_impulse = 14000.0
 contact_cooldown = 1.0
 radius = 14.0
 color = Color(0.85, 0.5, 0.15, 1)
-brain = SubResource("brain")

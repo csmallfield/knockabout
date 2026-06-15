@@ -61,20 +61,20 @@ var _wander_timer := 0.0
 
 # ------------------------------------------------------------------ lifecycle
 
-func setup(owner: Node) -> void:
-	_owner = owner
-	_body = owner as CharacterBody2D
-	_stats = owner.stats
-	brain = owner.profile.brain
+func setup(mob: Node) -> void:
+	_owner = mob
+	_body = mob as CharacterBody2D
+	_stats = mob.stats
+	brain = mob.profile.brain
 	if brain == null:
 		# Backward-compatible default: behave like the old beeliner, but smarter.
 		brain = BrainProfile.new()
-		brain.sense_radius = owner.aggro_radius
+		brain.sense_radius = mob.aggro_radius
 	for i in SLOT_COUNT:
 		_slots.append(Vector2.RIGHT.rotated(TAU * float(i) / float(SLOT_COUNT)))
 	_danger = PackedFloat32Array()
 	_danger.resize(SLOT_COUNT)
-	_look_ahead = owner.radius + LOOKAHEAD_PAD
+	_look_ahead = mob.radius + LOOKAHEAD_PAD
 	_strafe_sign = 1.0 if randf() < 0.5 else -1.0
 	_perc_timer = randf() * Tuning.AI_PERCEPTION_INTERVAL   # desync the herd
 

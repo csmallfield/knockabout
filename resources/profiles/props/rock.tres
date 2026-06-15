@@ -1,8 +1,8 @@
-[gd_resource type="Resource" script_class="PropProfile" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="PropProfile" format=3 uid="uid://b1ru0pe128hli"]
 
-[ext_resource type="Script" path="res://resources/prop_profile.gd" id="1"]
-[ext_resource type="Script" path="res://resources/physics_stats.gd" id="2"]
-[ext_resource type="Script" path="res://resources/break_payload.gd" id="3"]
+[ext_resource type="Script" uid="uid://v4ppend037fi" path="res://resources/prop_profile.gd" id="1"]
+[ext_resource type="Script" uid="uid://bx7a22bqvti26" path="res://resources/physics_stats.gd" id="2"]
+[ext_resource type="Script" uid="uid://bi04txattx61r" path="res://resources/break_payload.gd" id="3"]
 [ext_resource type="Resource" path="res://resources/profiles/debris/debris_medium.tres" id="4"]
 
 [sub_resource type="Resource" id="payload"]
@@ -30,5 +30,4 @@ script = ExtResource("1")
 stats = SubResource("stats")
 body_type = 1
 radius = 18.0
-rect_size = Vector2(0, 0)
 color = Color(0.45, 0.45, 0.5, 1)
