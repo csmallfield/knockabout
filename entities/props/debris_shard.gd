@@ -18,6 +18,7 @@ func _ready() -> void:
 	collision_layer = Tuning.L_PROP
 	# Debris↔debris (4↔4) is ON by default; first knob to turn per §10/§17.
 	collision_mask = Tuning.L_WORLD | Tuning.L_PLAYER | Tuning.L_ENEMY | Tuning.L_PROP
+	z_index = 4   # pool is an autoload (drawn before the scene) → lift above the map
 	gravity_scale = 0.0
 	angular_damp = 2.0
 	contact_monitor = true

@@ -4,4 +4,7 @@
 
 [resource]
 script = ExtResource("1")
+arc_degrees = 120.0
+range_px = 25.0
+blade_length = 20.0
 cooldown = 0.0

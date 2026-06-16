@@ -12,6 +12,8 @@ const DEBRIS_LIFETIME := 6.0         # s — then fade + return to pool
 const MAX_IMPACTS_PER_TICK := 64     # resolver throttle (GDD §8.2)
 const DEBRIS_POOL_SIZE := 120        # pre-instantiated shards (D7)
 const PICKUP_POOL_SIZE := 64         # pre-instantiated loot pickups (§6.2)
+const CORPSE_LINGER := 0.5           # s — grayed mob corpse sits before fading
+const CORPSE_FADE := 0.45            # s — corpse fade-out, then free
 
 const STUN_TIME_DEFAULT := 0.35      # s — mob landing stun
 const STUN_TIME_PLAYER := 0.2        # s — player landing stun (shortened, §4.1)

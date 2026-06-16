@@ -26,6 +26,8 @@ var _art: PlaceholderArt
 var _brain: MobBrain
 var _contact_zone: Area2D
 var _hp_bar: MiniHealthBar
+var _hurtbox: Area2D
+var _dying := false
 
 func _ready() -> void:
 	stats = profile.stats
@@ -75,7 +77,8 @@ func _ready() -> void:
 	breakable.setup(self, stats, _health)
 	add_child(breakable)
 
-	add_child(EntityKit.make_hurtbox(radius))
+	_hurtbox = EntityKit.make_hurtbox(radius)
+	add_child(_hurtbox)
 
 	# Contact-attack zone: slightly larger than the body (§4.2 row 6). The brain
 	# decides when to strike; this is the volume the strike must overlap.
@@ -90,6 +93,11 @@ func _ready() -> void:
 	add_child(_brain)
 
 func _physics_process(delta: float) -> void:
+	if _dying:
+		# Corpse: brain is silent, but keep driving motion so a launched body
+		# finishes its arc (decaying via drag) instead of freezing in place.
+		_motion.physics_update(Vector2.ZERO, delta)
+		return
 	var intent := Vector2.ZERO
 	if _motion.is_controllable():
 		intent = _brain.think(delta)
@@ -98,6 +106,33 @@ func _physics_process(delta: float) -> void:
 	_art.facing = face_dir
 	_refresh_visual()
 	_motion.physics_update(intent, delta)
+
+## Called by Breakable after entity_died is emitted (so scoring/loot already
+## fired). The mob turns gray, lingers as a corpse, then fades out and frees —
+## instead of vanishing in a single frame. The corpse is made fully inert:
+## it blocks nothing, can't be hit (no meter farming on bodies), and can't
+## attack. (Scoring/loot are unaffected — they ran at the moment of death.)
+func begin_death_sequence(_event: ImpactEvent) -> void:
+	if _dying:
+		return
+	_dying = true
+	remove_from_group("mobs")        # AI/targeting/separation ignore corpses
+	remove_from_group("ballistic")
+	_brain.interrupt()               # release any held attack token
+	set_deferred("collision_layer", 0)
+	set_deferred("collision_mask", 0)
+	if _hurtbox:
+		_hurtbox.set_deferred("collision_layer", 0)
+	if _contact_zone:
+		_contact_zone.set_deferred("monitoring", false)
+	if _hp_bar:
+		_hp_bar.visible = false
+
+	var t := create_tween()
+	t.tween_property(_art, "modulate", Color(0.45, 0.45, 0.5, 1.0), 0.12)
+	t.tween_interval(Tuning.CORPSE_LINGER)
+	t.tween_property(_art, "modulate:a", 0.0, Tuning.CORPSE_FADE)
+	t.tween_callback(queue_free)
 
 ## The brain calls this during a STRIKE; deals one synthetic hit if the player
 ## is inside the contact zone. Returns whether it connected.

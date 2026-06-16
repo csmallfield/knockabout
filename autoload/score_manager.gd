@@ -95,12 +95,15 @@ func _process(_delta: float) -> void:
 # ----------------------------------------------------------------- combat listeners
 
 func _on_impact(event: ImpactEvent, damage: float) -> void:
+	# Meter only builds when a live MOB takes the hit (body_b). Props, debris,
+	# and walls never feed it — even on a direct player swing. (This also retires
+	# the old debris-into-debris trickle worry.)
+	if not _is_mob(event.body_b):
+		return
 	var gain := 0.0
-	if _is_player(event.body_a) and (event.synthetic or _is_entity(event.body_b)):
-		# Direct: a hit the player instigated — swing (synthetic), roll shove, or
-		# a player-ballistic bonk into an entity (§4 + the §10 roll-credit
-		# recommendation). The entity-body_b guard keeps the player being flung
-		# into a *wall* (body_b == null) from building meter.
+	if _is_player(event.body_a):
+		# Direct: a hit the player instigated on a mob — swing (synthetic), roll
+		# shove, or a player-ballistic bonk (§4 + the §10 roll-credit rec).
 		gain = _config.per_hit_meter + _config.damage_meter_factor * damage
 		if event.swing_hits >= 2:
 			gain *= _config.multi_hit_mult       # multi-hit only applies to swings
@@ -193,6 +196,11 @@ func _emit_power() -> void:
 
 func _is_player(body: Node) -> bool:
 	return body != null and is_instance_valid(body) and body.is_in_group("player")
+
+## A live mob — i.e. in the "mobs" group. Dying corpses leave the group, so they
+## can't farm meter, and props/debris/walls are never in it.
+func _is_mob(body: Node) -> bool:
+	return body != null and is_instance_valid(body) and body.is_in_group("mobs")
 
 ## Indirect: enemy-into-enemy or prop-into-enemy (the scoped-down "bounce"
 ## reward, §4). Both parties are entities, neither is the player, real damage

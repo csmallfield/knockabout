@@ -35,4 +35,10 @@ func _on_died(event: ImpactEvent) -> void:
 		WorldState.mark_destroyed(MapManager.current_map_id, persist_id)
 
 	EventBus.entity_died.emit(_root, _stats, MapManager.current_map_id)
-	_root.queue_free()
+
+	# Let the entity run its own teardown (e.g. a mob's gray-out + fade corpse).
+	# Anything without that hook (props) is removed immediately, as before.
+	if _root.has_method("begin_death_sequence"):
+		_root.begin_death_sequence(event)
+	else:
+		_root.queue_free()
