@@ -20,3 +20,18 @@ extends Resource
 @export_group("Buffs")
 @export var speed_attack_scaling := true   ## SPEED also shortens attack cooldown (§6.5)
 ## INVINCIBLE blocks damage AND knockback (decision 8A) — hardcoded in Player.
+
+@export_group("Charge")
+@export var charge_base_move_mult := 0.6   ## move speed while winding up below tier 1
+
+@export_group("Block")
+@export var block_damage_mult := 0.25      ## incoming damage kept while blocking
+@export var block_knockback_mult := 0.3    ## incoming knockback kept while blocking
+@export var block_move_mult := 0.5         ## move speed while blocking
+@export var block_arc_degrees := 150.0     ## frontal cone that can block (360 = omni)
+
+@export_group("Parry")
+@export var parry_window := 0.16                ## s after pressing block that counts as a parry
+@export var parry_reflect_damage_mult := 1.5    ## × the damage that would have hit you
+@export var parry_reflect_impulse_mult := 1.2   ## × the attack's own impulse (synthetic hits)
+@export var parry_reflect_impulse := 30000.0    ## fallback impulse for non-synthetic parries

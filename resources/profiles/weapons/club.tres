@@ -1,6 +1,19 @@
 [gd_resource type="Resource" script_class="WeaponProfile" format=3 uid="uid://c2t2gjpxeeqy5"]
 
 [ext_resource type="Script" uid="uid://bijr0ouhak65q" path="res://resources/weapon_profile.gd" id="1"]
+[ext_resource type="Script" uid="uid://3c0mcy5qxrru" path="res://resources/charge_level.gd" id="2"]
+
+[sub_resource type="Resource" id="cl1"]
+script = ExtResource("2")
+damage_mult = 1.8
+impulse_mult = 1.6
+
+[sub_resource type="Resource" id="cl2"]
+script = ExtResource("2")
+hold_time = 0.85
+damage_mult = 3.2
+impulse_mult = 2.6
+move_mult = 0.35
 
 [resource]
 script = ExtResource("1")
@@ -8,3 +21,4 @@ arc_degrees = 120.0
 range_px = 25.0
 blade_length = 20.0
 cooldown = 0.0
+charge_levels = Array[ExtResource("2")]([SubResource("cl1"), SubResource("cl2")])

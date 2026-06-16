@@ -16,3 +16,5 @@ var flat_damage := 0.0             # weapon base damage applied to receiver
 var swing_hits := 0                # # distinct enemies this player swing has hit,
                                    # incl. this one. Only the player sets it
                                    # (via resolve_synthetic); 0 everywhere else (§2.6).
+var bypass_cooldown := false       # parry reflects: a new attack, not a duplicate
+                                   # contact, so skip the pair-cooldown guard (§5.3).

@@ -26,6 +26,6 @@ enum SwingPattern { ALTERNATE, FIXED }
 @export var shaft_width := 5.0
 @export var head_radius := 5.0
 
-## D5 hook: array of {hold_time, impulse_mult, damage_mult} dictionaries.
-## Empty for the prototype; swing code reads the reached level when populated.
-@export var charge_levels: Array[Dictionary] = []
+## D5: charged-attack tiers, ascending by hold_time. Empty ⇒ the weapon fires
+## on press (legacy instant swing); non-empty ⇒ hold-to-charge, release to swing.
+@export var charge_levels: Array[ChargeLevel] = []

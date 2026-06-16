@@ -31,6 +31,18 @@ var _swing_hits := {}
 var _roll_hitbox: Area2D
 var _shake_trauma := 0.0
 
+# --- charge attack (D5) ---
+var _charging := false
+var _charge_time := 0.0
+var _charge_level := -1            # -1 = base (uncharged); ≥0 indexes weapon.charge_levels
+var _swing_damage_mult := 1.0      # captured from the reached tier at release
+var _swing_impulse_mult := 1.0
+
+# --- block / parry ---
+var _blocking := false
+var _block_start_msec := 0
+var _block_shield: BlockShield
+
 func _ready() -> void:
 	stats = profile.stats
 	weapon = profile.weapon
@@ -70,6 +82,13 @@ func _ready() -> void:
 	_roll_hitbox = _build_roll_hitbox()
 	add_child(_roll_hitbox)
 
+	# Frontal block indicator (placeholder-art language: a drawn arc).
+	_block_shield = BlockShield.new()
+	_block_shield.radius = profile.body_radius + 8.0
+	_block_shield.arc_degrees = profile.block_arc_degrees
+	_block_shield.visible = false
+	add_child(_block_shield)
+
 	_camera = Camera2D.new()
 	_camera.position_smoothing_enabled = true
 	_camera.position_smoothing_speed = 8.0
@@ -98,24 +117,50 @@ func _physics_process(delta: float) -> void:
 			if _roll_timer <= 0.0:
 				_roll_hitbox.set_deferred("monitoring", false)
 		else:
-			intent = input * _walk_speed()
+			# --- block (held state); the rising edge opens the parry window ---
+			if Input.is_action_just_pressed("block"):
+				_cancel_charge()
+				_block_start_msec = Time.get_ticks_msec()
+			_blocking = Input.is_action_pressed("block")
+
+			# --- charge / attack (no-op while guarding) ---
+			_update_charge_input(delta)
+
+			# --- movement, slowed by charge or block ---
+			intent = input * _walk_speed() * _state_move_mult()
 			if input != Vector2.ZERO:
-				facing = input.normalized()
+				facing = input.normalized()   # still aim freely while charging / blocking
 				_art.facing = facing
+
+			# --- roll cancels both charge and block ---
 			if Input.is_action_just_pressed("roll") and _roll_cooldown <= 0.0:
+				_cancel_charge()
+				_blocking = false
 				_start_roll(input)
-		if Input.is_action_just_pressed("attack") and _attack_cooldown <= 0.0:
-			_start_swing()
-		if Input.is_action_just_pressed("interact"):
-			_try_interact()
+			if Input.is_action_just_pressed("interact"):
+				_try_interact()
+	else:
+		# Launched / stunned: you can't guard or hold a charge.
+		_blocking = false
+		_cancel_charge()
 
 	_motion.physics_update(intent, delta)
 	_update_swing(delta)
-	_update_buff_visual()
+	_update_visuals()
 
 ## Effective walk speed with the SPEED buff folded in (§6.5).
 func _walk_speed() -> float:
 	return profile.walk_speed * _buff.speed_mult()
+
+## Extra move-speed scalar from the current action state (charge / block).
+func _state_move_mult() -> float:
+	if _blocking:
+		return profile.block_move_mult
+	if _charging:
+		if _charge_level >= 0 and _charge_level < weapon.charge_levels.size():
+			return weapon.charge_levels[_charge_level].move_mult
+		return profile.charge_base_move_mult
+	return 1.0
 
 # --------------------------------------------------------------------- roll
 
@@ -127,7 +172,6 @@ func _start_roll(input: Vector2) -> void:
 	_roll_hitbox.monitoring = true
 
 func _check_roll_shoves() -> void:
-	# The roll is itself a physics event (§6.2): live-momentum body pair.
 	for area in _roll_hitbox.get_overlapping_areas():
 		var entity := EntityKit.hurtbox_entity(area)
 		if entity and entity != self:
@@ -142,16 +186,72 @@ func _build_roll_hitbox() -> Area2D:
 	area.add_child(EntityKit.circle_collider(14.0))
 	return area
 
+# -------------------------------------------------------------- charge input
+## Hold-to-charge, release-to-swing — but only when the weapon declares tiers.
+## A weapon with no charge_levels keeps the old fire-on-press behaviour.
+
+func _update_charge_input(delta: float) -> void:
+	if _blocking:
+		_cancel_charge()   # guarding suppresses the attack entirely
+		return
+
+	if weapon.charge_levels.is_empty():
+		# Legacy instant swing.
+		if Input.is_action_just_pressed("attack") and _attack_cooldown <= 0.0:
+			_release_swing(-1)
+		return
+
+	if Input.is_action_just_pressed("attack") and _attack_cooldown <= 0.0 and not _charging:
+		_charging = true
+		_charge_time = 0.0
+		_charge_level = -1
+
+	if _charging:
+		_charge_time += delta
+		_charge_level = _reached_charge_level(_charge_time)
+		if Input.is_action_just_released("attack"):
+			var lvl := _charge_level
+			_charging = false
+			_release_swing(lvl)
+
+func _reached_charge_level(t: float) -> int:
+	var lvl := -1
+	for i in weapon.charge_levels.size():
+		if t >= weapon.charge_levels[i].hold_time:
+			lvl = i
+		else:
+			break
+	return lvl
+
+func _cancel_charge() -> void:
+	_charging = false
+	_charge_time = 0.0
+	_charge_level = -1
+
+func _charge_ratio() -> float:
+	if weapon.charge_levels.is_empty():
+		return 0.0
+	var maxt: float = weapon.charge_levels.back().hold_time
+	if maxt <= 0.0:
+		return 0.0
+	return clampf(_charge_time / maxt, 0.0, 1.0)
+
 # -------------------------------------------------------------------- swing
-## The weapon is a visible 32 px club on a pivot at the player's center.
-## A swing sweeps the pivot across weapon.arc_degrees over active_frames;
-## the blade's Area2D is the actual contact volume. Sweep direction
-## alternates each swing.
+## The weapon is a visible club on a pivot at the player's center. A swing
+## sweeps it across weapon.arc_degrees over active_frames; the blade Area2D is
+## the contact volume. The reached charge tier scales damage + impulse.
+
+func _release_swing(level: int) -> void:
+	if level >= 0 and level < weapon.charge_levels.size():
+		var cl: ChargeLevel = weapon.charge_levels[level]
+		_swing_damage_mult = cl.damage_mult
+		_swing_impulse_mult = cl.impulse_mult
+	else:
+		_swing_damage_mult = 1.0
+		_swing_impulse_mult = 1.0
+	_start_swing()
 
 func _start_swing() -> void:
-	# SPEED also shortens the cooldown when speed_attack_scaling is on (§6.5).
-	# Note: club.tres has cooldown 0, so this is a no-op until a weapon has a
-	# real cooldown — the movement half of SPEED still shows.
 	var cd := weapon.cooldown
 	if profile.speed_attack_scaling and _buff.is_active(LootProfile.Kind.SPEED):
 		cd /= maxf(_buff.speed_mult(), 0.001)
@@ -167,9 +267,13 @@ func _start_swing() -> void:
 
 func _update_swing(delta: float) -> void:
 	if _swing_frames_left <= 0:
-		# At rest the club tracks the facing direction.
+		# At rest the club tracks facing — but while charging it cocks back,
+		# winding further the longer you hold (the telegraph).
+		var target := facing.angle()
+		if _charging:
+			target = facing.angle() - _swing_sign * deg_to_rad(weapon.arc_degrees) * 0.5 * _charge_ratio()
 		_weapon_pivot.rotation = lerp_angle(
-			_weapon_pivot.rotation, facing.angle(), minf(1.0, 14.0 * delta))
+			_weapon_pivot.rotation, target, minf(1.0, 14.0 * delta))
 		return
 	_swing_frames_left -= 1
 	var p := 1.0 - float(_swing_frames_left) / float(_swing_total_frames)
@@ -179,19 +283,16 @@ func _update_swing(delta: float) -> void:
 		var entity := EntityKit.hurtbox_entity(area)
 		if entity == null or entity == self or _swing_hits.has(entity.get_instance_id()):
 			continue
-		_swing_hits[entity.get_instance_id()] = true   # swing-id dedup (§6.1)
+		_swing_hits[entity.get_instance_id()] = true
 		var dir: Vector2 = (entity.global_position - global_position).normalized()
 		if dir == Vector2.ZERO:
 			dir = facing
 		if weapon.knockback_mode == WeaponProfile.KnockbackMode.TANGENTIAL:
-			dir = dir.rotated(_swing_sign * PI * 0.5)   # along the sweep at contact
-		# velocity_inherit: moving into the swing hits harder (§6.1).
+			dir = dir.rotated(_swing_sign * PI * 0.5)
 		var inherit := maxf(get_impact_velocity().dot(dir), 0.0)
-		var impulse := weapon.impulse + weapon.velocity_inherit * inherit * stats.mass
-		# swing_hits stamped AFTER registering this target, so the 1st enemy in a
-		# sweep carries 1 and the 2nd+ carry ≥2 — the multi-hit gate (§2.6).
+		var impulse := (weapon.impulse + weapon.velocity_inherit * inherit * stats.mass) * _swing_impulse_mult
 		ImpactResolver.resolve_synthetic(self, entity, dir, impulse,
-			weapon.flat_damage, entity.global_position, _swing_hits.size())
+			weapon.flat_damage * _swing_damage_mult, entity.global_position, _swing_hits.size())
 	if _swing_frames_left <= 0:
 		_swing_hitbox.set_deferred("monitoring", false)
 
@@ -202,7 +303,7 @@ func _build_weapon() -> Node2D:
 	var pivot := Node2D.new()
 	pivot.name = "WeaponPivot"
 	var tip := weapon.range_px
-	var base := maxf(tip - weapon.blade_length, 8.0)   # blade never inside the body
+	var base := maxf(tip - weapon.blade_length, 8.0)
 
 	var art := WeaponArt.new()
 	art.blade_base = base
@@ -225,7 +326,6 @@ func _build_weapon() -> Node2D:
 
 class WeaponArt:
 	extends Node2D
-	## Placeholder weapon: shaft + round head at the tip, styled by the profile.
 	var blade_base := 12.0
 	var blade_tip := 44.0
 	var color := Color(0.5, 0.36, 0.2)
@@ -238,9 +338,67 @@ class WeaponArt:
 		draw_circle(Vector2(blade_tip - head_radius + 2.0, 0), head_radius,
 			color.darkened(0.2))
 
+## A drawn frontal guard arc, shown while blocking; brighter in the parry window.
+class BlockShield:
+	extends Node2D
+	var radius := 18.0
+	var arc_degrees := 150.0
+	var facing := Vector2.DOWN
+	var parry := false
+
+	func _draw() -> void:
+		var a := facing.angle()
+		var half := deg_to_rad(arc_degrees) * 0.5
+		var col := Color(1.0, 0.95, 0.5, 0.95) if parry else Color(0.5, 0.8, 1.0, 0.8)
+		draw_arc(Vector2.ZERO, radius, a - half, a + half, 28, col, 3.0)
+
+# --------------------------------------------------------------- block / parry
+
+func _is_parrying() -> bool:
+	return _blocking and (Time.get_ticks_msec() - _block_start_msec) <= int(profile.parry_window * 1000.0)
+
+## Frontal check from the event (accurate: event.normal points attacker→player).
+func _facing_attacker(event: ImpactEvent) -> bool:
+	if event == null:
+		return true
+	var to_attacker := Vector2.ZERO
+	if event.body_a is Node2D and is_instance_valid(event.body_a):
+		to_attacker = (event.body_a as Node2D).global_position - global_position
+	else:
+		to_attacker = -event.normal
+	if to_attacker.length() < 0.001:
+		return true
+	return facing.dot(to_attacker.normalized()) >= cos(deg_to_rad(profile.block_arc_degrees * 0.5))
+
+## Frontal check from knockback only (apply_impact_result has no event — the
+## knockback delta points away from the attacker, so negate it for the source).
+func _facing_attacker_vel(new_velocity: Vector2) -> bool:
+	var delta := new_velocity - get_impact_velocity()
+	if delta.length() < 1.0:
+		return true
+	return facing.dot(-delta.normalized()) >= cos(deg_to_rad(profile.block_arc_degrees * 0.5))
+
+## Reflect the attack's damage + impulse back onto the attacker. Routed through
+## the resolver (for the juice + scoring/meter credit) with bypass_cooldown set —
+## see impact_resolver._pair_ok: a same-frame reflect shares the pair key with
+## the hit that triggered it and would otherwise be swallowed by PAIR_COOLDOWN.
+func _do_parry(amount: float, event: ImpactEvent) -> void:
+	add_trauma(0.35)
+	var attacker := event.body_a
+	if attacker == null or not is_instance_valid(attacker) or not attacker.has_method("take_impact_damage"):
+		return
+	var dir := ((attacker as Node2D).global_position - global_position).normalized()
+	if dir == Vector2.ZERO:
+		dir = facing
+	var reflect_dmg := amount * profile.parry_reflect_damage_mult
+	var reflect_imp: float = profile.parry_reflect_impulse
+	if event.synthetic and event.synthetic_impulse > 0.0:
+		reflect_imp = event.synthetic_impulse * profile.parry_reflect_impulse_mult
+	ImpactResolver.resolve_synthetic(self, attacker, dir, reflect_imp, reflect_dmg,
+		(attacker as Node2D).global_position, 0, true)
+
 # --------------------------------------------------------------- loot / buffs
 
-## Called by a Pickup on overlap (§6.4). Routes the payload by kind.
 func collect(loot: LootProfile) -> void:
 	match loot.kind:
 		LootProfile.Kind.COIN:
@@ -254,30 +412,42 @@ func collect(loot: LootProfile) -> void:
 		LootProfile.Kind.INVINCIBLE:
 			_buff.apply(LootProfile.Kind.INVINCIBLE, loot.amount)
 
-## Partial heal (§6.4): HealthComponent does the clamp; the player owns the bus.
 func heal(amount: float) -> void:
 	_health.heal(amount)
 	EventBus.player_hp_changed.emit(_health.hp, _health.max_hp)
 
-## INVINCIBLE gets a distinct gold flicker so it doesn't read as i-frames.
-func _update_buff_visual() -> void:
+## Visual priority: INVINCIBLE > i-frames > block/parry > charge > normal.
+func _update_visuals() -> void:
+	_block_shield.visible = _blocking
+	if _blocking:
+		_block_shield.facing = facing
+		_block_shield.parry = _is_parrying()
+		_block_shield.queue_redraw()
+
 	if _buff.is_active(LootProfile.Kind.INVINCIBLE):
 		_art.modulate = Color(1.0, 0.9, 0.35)
 		_art.modulate.a = 0.55 if (int(Time.get_ticks_msec() / 60.0) % 2 == 0) else 1.0
-	elif _iframes > 0.0:
+		return
+	if _iframes > 0.0:
 		_art.modulate = Color.WHITE
 		_art.modulate.a = 0.5 if (int(_iframes * 20.0) % 2 == 0) else 1.0
-	else:
-		_art.modulate = Color.WHITE
-		_art.modulate.a = 1.0
+		return
+	var base := Color.WHITE
+	if _blocking:
+		base = Color(0.7, 0.95, 1.0) if _is_parrying() else Color(0.6, 0.75, 0.95)
+	elif _charging:
+		base = Color.WHITE.lerp(Color(1.0, 0.75, 0.3), _charge_ratio())
+	_art.modulate = base
+	_art.modulate.a = 1.0
 
 # ---------------------------------------------------------- damage loop (D6)
 
 func _on_damaged(_amount: float, _event: ImpactEvent) -> void:
 	_art.flash()
 	_iframes = maxf(_iframes, profile.hit_iframes)
+	_cancel_charge()   # a clean hit drops the wind-up
 	EventBus.player_hp_changed.emit(_health.hp, _health.max_hp)
-	EventBus.player_damaged.emit(_amount)   # combo reset lives in ScoreManager
+	EventBus.player_damaged.emit(_amount)
 
 func _on_died(_event: ImpactEvent) -> void:
 	MapManager.respawn_player()
@@ -317,12 +487,28 @@ func get_impact_velocity() -> Vector2:
 
 func apply_impact_result(new_velocity: Vector2) -> void:
 	# I-frames block damage only — knockback/launch still applies (§6.3).
-	# INVINCIBLE additionally blocks launch/knockback for its duration (8A).
+	# INVINCIBLE blocks launch/knockback for its duration (8A).
 	if _buff.is_active(LootProfile.Kind.INVINCIBLE):
 		return
+	# Block (frontal) softens knockback; a timed parry negates it entirely.
+	if _blocking and _facing_attacker_vel(new_velocity):
+		if _is_parrying():
+			return
+		var cur := get_impact_velocity()
+		new_velocity = cur + (new_velocity - cur) * profile.block_knockback_mult
 	_motion.apply_impact_result(new_velocity)
 
 func take_impact_damage(amount: float, event: ImpactEvent) -> void:
+	# A frontal guard is checked first so a well-timed parry always reflects,
+	# even through residual i-frames.
+	if _blocking and _facing_attacker(event):
+		if _is_parrying():
+			_do_parry(amount, event)
+			return
+		if _iframes > 0.0 or _buff.is_active(LootProfile.Kind.INVINCIBLE):
+			return
+		_health.take_damage(amount * profile.block_damage_mult, event)
+		return
 	if _iframes > 0.0 or _buff.is_active(LootProfile.Kind.INVINCIBLE):
 		return
 	_health.take_damage(amount, event)
@@ -334,7 +520,7 @@ func add_trauma(amount: float) -> void:
 
 func _update_camera_shake(delta: float) -> void:
 	_shake_trauma = maxf(_shake_trauma - delta * 1.8, 0.0)
-	var shake := _shake_trauma * _shake_trauma   # trauma-based (§12)
+	var shake := _shake_trauma * _shake_trauma
 	_camera.offset = Vector2(
 		randf_range(-1.0, 1.0), randf_range(-1.0, 1.0)) * shake * 8.0
 

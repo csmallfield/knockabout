@@ -88,7 +88,7 @@ func resolve_kinematic(actor: Node, col: KinematicCollision2D, velocity: Vector2
 ## but the player leaves it at the default 0.
 func resolve_synthetic(attacker: Node, target: Node, dir: Vector2,
 		impulse: float, flat_damage: float, contact := Vector2.ZERO,
-		swing_hits := 0) -> void:
+		swing_hits := 0, bypass_cooldown := false) -> void:
 	var ev := ImpactEvent.new()
 	ev.body_a = attacker
 	ev.body_b = target
@@ -99,6 +99,7 @@ func resolve_synthetic(attacker: Node, target: Node, dir: Vector2,
 	ev.synthetic_impulse = impulse
 	ev.flat_damage = flat_damage
 	ev.swing_hits = swing_hits
+	ev.bypass_cooldown = bypass_cooldown
 	resolve(ev)
 
 ## Convenience: two live bodies meeting (roll shove, prop contact reports).
@@ -160,6 +161,8 @@ func _write_back(event: ImpactEvent, new_v: Array[Vector2],
 		event.body_b.apply_impact_result(new_v[1])
 
 func _pair_ok(event: ImpactEvent) -> bool:
+	if event.bypass_cooldown:
+		return true   # parry reflect: a fresh attack on a pair that just collided
 	var ia: int = event.body_a.get_instance_id() if event.body_a else 0
 	var ib: int = event.body_b.get_instance_id() if event.body_b else 0
 	var key := "%d_%d" % [mini(ia, ib), maxi(ia, ib)]
