@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://chogjnpoplkr0" path="res://resources/mob_profile.gd" id="1"]
 [ext_resource type="Script" uid="uid://bx7a22bqvti26" path="res://resources/physics_stats.gd" id="2"]
 [ext_resource type="Script" uid="uid://cpvffe8iharn2" path="res://resources/brain_profile.gd" id="3"]
+[ext_resource type="Resource" path="res://resources/profiles/loot/basic_loot.tres" id="4"]
 
 [sub_resource type="Resource" id="brain"]
 script = ExtResource("3")
@@ -45,3 +46,5 @@ contact_impulse = 14000.0
 contact_cooldown = 1.0
 radius = 14.0
 color = Color(0.85, 0.5, 0.15, 1)
+point_value = 20.0
+loot = ExtResource("4")

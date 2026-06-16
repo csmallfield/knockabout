@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="LootProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/loot_profile.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+kind = 0
+color = Color(1.0, 0.82, 0.25, 1)
+radius = 5.0
+magnetize_radius = 56.0
+lifetime = 12.0
+amount = 1.0

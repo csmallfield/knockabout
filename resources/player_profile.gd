@@ -16,3 +16,7 @@ extends Resource
 @export_group("Body")
 @export var body_radius := 10.0
 @export var color := Color(0.95, 0.85, 0.35)
+
+@export_group("Buffs")
+@export var speed_attack_scaling := true   ## SPEED also shortens attack cooldown (§6.5)
+## INVINCIBLE blocks damage AND knockback (decision 8A) — hardcoded in Player.

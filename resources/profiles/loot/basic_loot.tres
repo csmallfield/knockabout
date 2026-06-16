@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="LootTable" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://resources/loot_table.gd" id="1"]
+[ext_resource type="Script" path="res://resources/loot_drop.gd" id="2"]
+[ext_resource type="Resource" path="res://resources/profiles/loot/health.tres" id="3"]
+[ext_resource type="Resource" path="res://resources/profiles/loot/power.tres" id="4"]
+[ext_resource type="Resource" path="res://resources/profiles/loot/speed.tres" id="5"]
+[ext_resource type="Resource" path="res://resources/profiles/loot/invincible.tres" id="6"]
+
+[sub_resource type="Resource" id="drop_health"]
+script = ExtResource("2")
+loot = ExtResource("3")
+weight = 3.0
+
+[sub_resource type="Resource" id="drop_power"]
+script = ExtResource("2")
+loot = ExtResource("4")
+weight = 1.0
+
+[sub_resource type="Resource" id="drop_speed"]
+script = ExtResource("2")
+loot = ExtResource("5")
+weight = 2.0
+
+[sub_resource type="Resource" id="drop_invincible"]
+script = ExtResource("2")
+loot = ExtResource("6")
+weight = 0.5
+
+[resource]
+script = ExtResource("1")
+coin_min = 0
+coin_max = 2
+drop_chance = 0.35
+drops = Array[LootDrop]([SubResource("drop_health"), SubResource("drop_power"), SubResource("drop_speed"), SubResource("drop_invincible")])

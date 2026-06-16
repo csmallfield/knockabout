@@ -17,3 +17,7 @@ extends Resource
 @export_group("Body")
 @export var radius := 10.0
 @export var color := Color(0.35, 0.8, 0.3)
+
+@export_group("Rewards")
+@export var point_value := 10.0   ## > 0 ⇒ pays score on death (props leave it 0)
+@export var loot: LootTable       ## null ⇒ no drops

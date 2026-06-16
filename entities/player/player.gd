@@ -15,6 +15,7 @@ var _motion: BallisticMotion
 var _health: HealthComponent
 var _art: PlaceholderArt
 var _camera: Camera2D
+var _buff: BuffComponent
 
 var _roll_timer := 0.0
 var _roll_cooldown := 0.0
@@ -58,6 +59,9 @@ func _ready() -> void:
 	_health.died.connect(_on_died)
 	add_child(_health)
 
+	_buff = BuffComponent.new()
+	add_child(_buff)
+
 	add_child(EntityKit.make_hurtbox(profile.body_radius))
 
 	_weapon_pivot = _build_weapon()
@@ -88,13 +92,13 @@ func _physics_process(delta: float) -> void:
 		if _roll_timer > 0.0:
 			_roll_timer -= delta
 			var t := 1.0 - _roll_timer / profile.roll_duration
-			intent = _roll_dir * lerpf(profile.roll_speed, profile.walk_speed, t)
+			intent = _roll_dir * lerpf(profile.roll_speed, _walk_speed(), t)
 			if _roll_hitbox.monitoring:
 				_check_roll_shoves()
 			if _roll_timer <= 0.0:
 				_roll_hitbox.set_deferred("monitoring", false)
 		else:
-			intent = input * profile.walk_speed
+			intent = input * _walk_speed()
 			if input != Vector2.ZERO:
 				facing = input.normalized()
 				_art.facing = facing
@@ -107,7 +111,11 @@ func _physics_process(delta: float) -> void:
 
 	_motion.physics_update(intent, delta)
 	_update_swing(delta)
-	_art.modulate.a = 0.5 if (_iframes > 0.0 and int(_iframes * 20.0) % 2 == 0) else 1.0
+	_update_buff_visual()
+
+## Effective walk speed with the SPEED buff folded in (§6.5).
+func _walk_speed() -> float:
+	return profile.walk_speed * _buff.speed_mult()
 
 # --------------------------------------------------------------------- roll
 
@@ -141,7 +149,13 @@ func _build_roll_hitbox() -> Area2D:
 ## alternates each swing.
 
 func _start_swing() -> void:
-	_attack_cooldown = weapon.cooldown
+	# SPEED also shortens the cooldown when speed_attack_scaling is on (§6.5).
+	# Note: club.tres has cooldown 0, so this is a no-op until a weapon has a
+	# real cooldown — the movement half of SPEED still shows.
+	var cd := weapon.cooldown
+	if profile.speed_attack_scaling and _buff.is_active(LootProfile.Kind.SPEED):
+		cd /= maxf(_buff.speed_mult(), 0.001)
+	_attack_cooldown = cd
 	_swing_frames_left = weapon.active_frames
 	_swing_total_frames = weapon.active_frames
 	_swing_hits.clear()
@@ -174,8 +188,10 @@ func _update_swing(delta: float) -> void:
 		# velocity_inherit: moving into the swing hits harder (§6.1).
 		var inherit := maxf(get_impact_velocity().dot(dir), 0.0)
 		var impulse := weapon.impulse + weapon.velocity_inherit * inherit * stats.mass
+		# swing_hits stamped AFTER registering this target, so the 1st enemy in a
+		# sweep carries 1 and the 2nd+ carry ≥2 — the multi-hit gate (§2.6).
 		ImpactResolver.resolve_synthetic(self, entity, dir, impulse,
-			weapon.flat_damage, entity.global_position)
+			weapon.flat_damage, entity.global_position, _swing_hits.size())
 	if _swing_frames_left <= 0:
 		_swing_hitbox.set_deferred("monitoring", false)
 
@@ -222,12 +238,46 @@ class WeaponArt:
 		draw_circle(Vector2(blade_tip - head_radius + 2.0, 0), head_radius,
 			color.darkened(0.2))
 
+# --------------------------------------------------------------- loot / buffs
+
+## Called by a Pickup on overlap (§6.4). Routes the payload by kind.
+func collect(loot: LootProfile) -> void:
+	match loot.kind:
+		LootProfile.Kind.COIN:
+			ScoreManager.add_coins(int(loot.amount))
+		LootProfile.Kind.HEALTH:
+			heal(loot.amount)
+		LootProfile.Kind.POWER:
+			ScoreManager.add_power_levels(loot.power_levels)
+		LootProfile.Kind.SPEED:
+			_buff.apply(LootProfile.Kind.SPEED, loot.amount, {"speed_mult": loot.speed_mult})
+		LootProfile.Kind.INVINCIBLE:
+			_buff.apply(LootProfile.Kind.INVINCIBLE, loot.amount)
+
+## Partial heal (§6.4): HealthComponent does the clamp; the player owns the bus.
+func heal(amount: float) -> void:
+	_health.heal(amount)
+	EventBus.player_hp_changed.emit(_health.hp, _health.max_hp)
+
+## INVINCIBLE gets a distinct gold flicker so it doesn't read as i-frames.
+func _update_buff_visual() -> void:
+	if _buff.is_active(LootProfile.Kind.INVINCIBLE):
+		_art.modulate = Color(1.0, 0.9, 0.35)
+		_art.modulate.a = 0.55 if (int(Time.get_ticks_msec() / 60.0) % 2 == 0) else 1.0
+	elif _iframes > 0.0:
+		_art.modulate = Color.WHITE
+		_art.modulate.a = 0.5 if (int(_iframes * 20.0) % 2 == 0) else 1.0
+	else:
+		_art.modulate = Color.WHITE
+		_art.modulate.a = 1.0
+
 # ---------------------------------------------------------- damage loop (D6)
 
 func _on_damaged(_amount: float, _event: ImpactEvent) -> void:
 	_art.flash()
 	_iframes = maxf(_iframes, profile.hit_iframes)
 	EventBus.player_hp_changed.emit(_health.hp, _health.max_hp)
+	EventBus.player_damaged.emit(_amount)   # combo reset lives in ScoreManager
 
 func _on_died(_event: ImpactEvent) -> void:
 	MapManager.respawn_player()
@@ -267,10 +317,13 @@ func get_impact_velocity() -> Vector2:
 
 func apply_impact_result(new_velocity: Vector2) -> void:
 	# I-frames block damage only — knockback/launch still applies (§6.3).
+	# INVINCIBLE additionally blocks launch/knockback for its duration (8A).
+	if _buff.is_active(LootProfile.Kind.INVINCIBLE):
+		return
 	_motion.apply_impact_result(new_velocity)
 
 func take_impact_damage(amount: float, event: ImpactEvent) -> void:
-	if _iframes > 0.0:
+	if _iframes > 0.0 or _buff.is_active(LootProfile.Kind.INVINCIBLE):
 		return
 	_health.take_damage(amount, event)
 

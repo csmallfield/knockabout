@@ -11,6 +11,7 @@ const TANGENT_FRICTION := 0.95       # tangential velocity retained per bounce
 const DEBRIS_LIFETIME := 6.0         # s — then fade + return to pool
 const MAX_IMPACTS_PER_TICK := 64     # resolver throttle (GDD §8.2)
 const DEBRIS_POOL_SIZE := 120        # pre-instantiated shards (D7)
+const PICKUP_POOL_SIZE := 64         # pre-instantiated loot pickups (§6.2)
 
 const STUN_TIME_DEFAULT := 0.35      # s — mob landing stun
 const STUN_TIME_PLAYER := 0.2        # s — player landing stun (shortened, §4.1)
@@ -27,5 +28,6 @@ const L_PROP := 8
 const L_HITBOX := 16
 const L_HURTBOX := 32
 const L_INTERACT := 64
+const L_LOOT := 128                  # bit 8 — pickups (§6.2)
 
 const TILE := 32

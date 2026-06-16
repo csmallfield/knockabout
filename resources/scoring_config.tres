@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ScoringConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/scoring_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+base_fill_cost = 100.0
+fill_cost_growth = 1.7
+per_hit_meter = 10.0
+damage_meter_factor = 0.4
+multi_hit_mult = 1.5
+bounce_mult = 2.0
+combo_grace = 2.5
+meter_decay_rate = 60.0
+indirect_needs_combo = true

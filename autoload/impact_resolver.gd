@@ -83,8 +83,12 @@ func resolve_kinematic(actor: Node, col: KinematicCollision2D, velocity: Vector2
 	resolve(ev)
 
 ## Convenience: synthetic weapon / contact-attack hit (§4.2 rows 5–6, §6.1).
+## swing_hits: # distinct enemies the player's current swing has hit (incl. this
+## one), stamped onto the event for the multi-hit meter bonus (§2.6). Everyone
+## but the player leaves it at the default 0.
 func resolve_synthetic(attacker: Node, target: Node, dir: Vector2,
-		impulse: float, flat_damage: float, contact := Vector2.ZERO) -> void:
+		impulse: float, flat_damage: float, contact := Vector2.ZERO,
+		swing_hits := 0) -> void:
 	var ev := ImpactEvent.new()
 	ev.body_a = attacker
 	ev.body_b = target
@@ -94,6 +98,7 @@ func resolve_synthetic(attacker: Node, target: Node, dir: Vector2,
 	ev.synthetic = true
 	ev.synthetic_impulse = impulse
 	ev.flat_damage = flat_damage
+	ev.swing_hits = swing_hits
 	resolve(ev)
 
 ## Convenience: two live bodies meeting (roll shove, prop contact reports).

@@ -25,6 +25,8 @@ DebrisPool="*res://autoload/debris_pool.gd"
 MapManager="*res://autoload/map_manager.gd"
 Dev="*res://autoload/dev.gd"
 CombatDirector="*res://autoload/combat_director.gd"
+PickupPool="*res://autoload/pickup_pool.gd"
+ScoreManager="*res://autoload/score_manager.gd"
 
 [display]
 
@@ -95,6 +97,7 @@ interact={
 2d_physics/layer_5="HITBOX"
 2d_physics/layer_6="HURTBOX"
 2d_physics/layer_7="INTERACT"
+2d_physics/layer_8="LOOT"
 
 [physics]
 
