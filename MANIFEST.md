@@ -1,90 +1,110 @@
-# Knockabout — Scoring, Power Meter & Loot — drop-in manifest
+# Knockabout — Room-Clear Run (drop-in)
 
-Unzip at the project root; the tree mirrors `res://`. **REPLACE** files overwrite
-existing ones; **NEW** files are additions. Two edits to `project.godot` are
-manual merges (bottom of this file).
+Turns the free-roam prototype into a 10-room run: each room seals its doors on
+entry and opens them only when every enemy is defeated; clearing the final room
+(room_10) wins. Identical layout every run, hand-authored, backtracking allowed.
 
-## New scripts
-| File | res:// path |
-|---|---|
-| scoring_config.gd | `resources/scoring_config.gd` |
-| loot_profile.gd   | `resources/loot_profile.gd` |
-| loot_drop.gd      | `resources/loot_drop.gd` |
-| loot_table.gd     | `resources/loot_table.gd` |
-| buff_component.gd | `components/buff_component.gd` |
-| pickup.gd         | `entities/pickup.gd` |
-| pickup_pool.gd    | `autoload/pickup_pool.gd` |
-| score_manager.gd  | `autoload/score_manager.gd` |
-
-## Replacement scripts (overwrite)
-| File | res:// path | What changed |
-|---|---|---|
-| event_bus.gd        | `autoload/event_bus.gd`        | + `player_damaged` signal |
-| tuning.gd           | `autoload/tuning.gd`           | + `L_LOOT`, `PICKUP_POOL_SIZE` |
-| impact_resolver.gd  | `autoload/impact_resolver.gd`  | `resolve_synthetic()` + optional `swing_hits` arg |
-| world_state.gd      | `autoload/world_state.gd`      | + persistent `coins` |
-| impact_event.gd     | `systems/impact_event.gd`      | + `swing_hits` field |
-| health_component.gd | `components/health_component.gd` | + `heal(amount)` |
-| mob_profile.gd      | `resources/mob_profile.gd`     | + `point_value`, `loot` |
-| player_profile.gd   | `resources/player_profile.gd`  | + `speed_attack_scaling` |
-| player.gd           | `entities/player/player.gd`    | buffs, collect/heal, swing-hit stamp, invincibility |
-| hud.gd              | `ui/hud.gd`                    | score / coins / power bar |
-
-## New resources
-| File | res:// path |
-|---|---|
-| scoring_config.tres | `resources/scoring_config.tres` (NOT under profiles/ — see note) |
-| coin.tres / health.tres / power.tres / speed.tres / invincible.tres | `resources/profiles/loot/` |
-| basic_loot.tres | `resources/profiles/loot/basic_loot.tres` |
-
-## Replacement resources (overwrite)
-| File | res:// path | What changed |
-|---|---|---|
-| goblin.tres | `resources/profiles/mobs/goblin.tres` | + `point_value = 8`, `loot` |
-| brute.tres  | `resources/profiles/mobs/brute.tres`  | + `point_value = 20`, `loot` |
-| orc.tres    | `resources/profiles/mobs/orc.tres`    | + `point_value = 40`, `loot` |
+Unzip over `res://`, preserving paths. Nothing else to configure — **no
+`project.godot` changes**: there are no new autoloads (the `RoomController` is a
+per-map node, not a singleton), and no new collision layers (the LOOT layer you
+already added is reused, nothing new). `class_name` globals (`RoomController`,
+`Gate`) register automatically on first scan.
 
 ---
 
-## project.godot — two manual merges
+## NEW files (purely additive)
 
-### 1. [autoload] — add these two lines after CombatDirector:
-```
-PickupPool="*res://autoload/pickup_pool.gd"
-ScoreManager="*res://autoload/score_manager.gd"
-```
+| File | What it is |
+|---|---|
+| `systems/room_controller.gd` | `class_name RoomController`. One per map. Counts mob deaths (via `EventBus.entity_died`, filtered to `MobProfile`) against the total the map declared, opens all gates + marks the room cleared in `WorldState` when the count is met, and fires `run_completed` on the final room. Inert if the map authored no gates (so legacy maps are untouched). |
+| `maps/gate.gd` | `class_name Gate`. The visible lockable door: an `Area2D` trigger (fires the transition only while open) + a child `StaticBody2D` on `L_WORLD` that physically seals the gap while locked + a drawn placeholder bar (iron when shut, retracts/greens when open). Builds its own collision shapes — no external helper dependency. |
+| `maps/room_01.gd` … `room_10.gd` | The ten room scripts (`extends MapBase`). |
+| `maps/room_01.tscn` … `room_10.tscn` | The ten room scenes (script + `map_id`). `room_10` sets `is_final = true` in its **script** (`room_10.gd`), read by `MapBase` after `_build()` — the scene file no longer carries it, so a scene-file quirk can't disarm the win condition. |
+| `ui/run_overlay.gd` | `class_name RunOverlay`. Minimal victory screen; pauses the game, shows score/coins, "Play again". Built at runtime by `game.gd`. |
 
-### 2. [layer_names] — add the 8th physics layer:
-```
-2d_physics/layer_8="LOOT"
-```
+## REPLACE files (full-file — diff before committing)
+
+These are whole-file replacements of core systems. The intended delta in each is
+listed so you can confirm the diff is *only* this and nothing in the untouched
+logic drifted:
+
+| File | Intended change (everything else unchanged) |
+|---|---|
+| `autoload/event_bus.gd` | Added two signals: `room_cleared(map_id)`, `run_completed()`. |
+| `autoload/world_state.gd` | Added `_rooms_cleared` dict + `mark_room_cleared` / `is_room_cleared`, and `reset_run()` (wipes `_maps`, `_rooms_cleared`, `coins`). |
+| `autoload/score_manager.gd` | `_on_map_changed` **no longer zeroes** score/power/meter — they now carry across rooms; it only re-syncs the HUD. Added `reset_run()`. `_on_player_damaged` still resets power on a hit (decision 6A); **score is untouched by damage**, so it survives death within a run. |
+| `autoload/map_manager.gd` | `MAPS` now lists `room_01`…`room_10` (legacy `overworld_*` / `interior_*` kept, but unused by the run). Transition/respawn logic unchanged. |
+| `autoload/dev.gd` | **F6 now deals lethal damage** instead of `queue_free` (so kills travel the normal death path and count toward room-clear — a raw free would softlock a gated room). Added **F10 = force-clear current room** (softlock failsafe). F1 overlay now also shows "mobs alive". |
+| `maps/map_base.gd` | Added `@export var is_final` (read **after** `_build()`, so a room can set it in script); creates a `RoomController` (`_room`) before `_build()` and calls `_room.finalize(...)` after; new helpers `add_gate`, `add_door`, `add_mob_spawner`, `add_wall_run`, and `force_clear_room()`. Existing `place` / `add_exit` / `add_building` / tileset builder preserved. |
+| `maps/mob_spawner.gd` | Skips spawning (frees itself) if the current room is already cleared — so cleared rooms stay empty on backtrack. |
+| `ui/hud.gd` | Added a "Room N / 10" label and a door-status line (red "LOCKED — defeat all enemies" / green "OPEN — choose an exit"), driven by `map_changed` (lock state read from `WorldState`) and `room_cleared`. |
+| `game.gd` | Starts the run at `room_01`; builds the `RunOverlay`; on `run_completed` shows victory, on restart calls `WorldState.reset_run()` + `ScoreManager.reset_run()` then reloads room_01. `game.tscn` is **unchanged** (overlay is built in code). |
 
 ---
 
-## Notes / gotchas
+## The room graph (undirected; identical every run)
 
-- **`scoring_config.tres` placement.** It lives in `resources/`, not
-  `resources/profiles/`, on purpose: `EntityRegistry` scans `profiles/` and turns
-  every `.tres` into a spawnable id. Keeping the config out of that folder avoids
-  a junk "scoring_config" id. The loot profiles DO live under `profiles/loot/`,
-  which is fine — they're loaded but never spawned, exactly like `debris/`.
+```
+        01
+       /  \
+     02    03
+    / \   / \
+  04   \ /   06
+   |    X    |
+   |   / \   |
+   |  05   \ |
+   |  | \   \|
+   |  |  \   08
+   \  |   \ / |
+    \ |    X  |
+     \|   / \ |
+      07     09 ── 10  (final, leaf)
+       \     /
+        \   /
+         (07,08 → 09)
+```
 
-- **`basic_loot.tres` is the one hand-authored typed-array file.** Its `drops`
-  line uses `Array[LootDrop]([...])`. If your Godot build rejects that notation on
-  import, the zero-risk fix is to open `basic_loot.tres` in the inspector and drag
-  the four loot profiles into the `drops` array there (the editor rewrites the
-  notation correctly). Everything else is flat `.tres` with no array risk.
+Edges: 01–02, 01–03, 02–04, 02–05, 03–05, 03–06, 04–07, 05–07, 05–08, 06–08,
+07–09, 08–09, 09–10. Doors/room: 01→2, 05 is the 4-door hub, 10 is the 1-door
+finale. "Better/worse paths" are expressed by **difficulty**, not length —
+e.g. the 06 branch is two brutes, the 04 branch is loose goblins. Path lengths
+to the end are all ~6 rooms, so the choice is risk, not distance.
 
-- **SPEED's attack-speed half is currently invisible** because `club.tres` has
-  `cooldown = 0.0`; the movement speed-up still shows. It activates the moment a
-  weapon has a real cooldown.
+Difficulty ramp: 01 (2 goblins) → 04 (4 goblins) / 06 (2 brutes) →
+05 & 08 (mixed, brute+orc) → 09 (2 orcs) → 10 (orc+brute+2 goblins).
 
-- **Loot velocity** scatters randomly off the kill. The GDD wanted it to inherit
-  the death's incoming velocity, but `EventBus.entity_died` doesn't carry that.
-  Say the word and I'll widen `entity_died` to pass it through (touches Breakable
-  + FeedbackManager's handler).
+---
 
-- **Indirect-hit trickle.** Debris-into-debris technically qualifies as an
-  "indirect" hit while a combo is live, so a big debris burst mid-combo can add a
-  little meter. The `indirect_needs_combo` gate limits it. If it bugs you in
-  playtest, add a "≥1 party is a mob" check to `ScoreManager._is_indirect`.
+## Debug keys (debug builds only)
+
+F1 overlay (now incl. mobs-alive) · F2/F3/F4 spawn goblin/brute/orc at mouse ·
+F5 barrel · **F6 kill all mobs (lethal, counts toward clear)** · F7 refill HP ·
+F8 collision shapes · F9 stress test · **F10 force-clear current room**.
+
+---
+
+## Design calls I made (worth a playtest pass)
+
+1. **Arena lock-in.** Entering an uncleared room locks **all** its doors,
+   including the one you came in through — classic dungeon-room feel. The room
+   you *came from* stays open (cleared rooms persist), so a door between a
+   cleared and an uncleared room is open on the cleared side, locked on the
+   uncleared side. If you'd rather leave the entry door open, it's a small change
+   in `RoomController.finalize` (skip locking the gate whose `target`/spawn
+   matches the arrival) — say the word.
+2. **Score survives death; power doesn't.** Within a run, score and the power
+   meter carry across rooms. Taking a hit still drops your multiplier (6A), and
+   death (respawn-in-room) keeps your score. New run wipes everything.
+3. **Clear detection is by count, not polling.** Each room declares its mob
+   total synchronously; the controller tallies deaths. Reliable, but it assumes
+   every defeated mob fires `entity_died` — which is why F6 was changed to deal
+   damage rather than free.
+4. **Softlock risk.** Since doors lock you in, a mob wedged somewhere unreachable
+   would trap you. Rooms are open with central spawns to avoid it, but **F10**
+   (and F6) are your escape hatch if it happens — flag any room where it does and
+   I'll move the spawn.
+5. **Attack-speed (SPEED) is still invisible.** The club's cooldown is 0, so the
+   power-meter SPEED bonus has nothing to act on yet — unchanged from before,
+   just noting it carries into the run now.
+6. Legacy maps (`overworld_a/b`, `interior_house_a`) are still registered but
+   not part of the run; their `RoomController` stays inert (no gates).

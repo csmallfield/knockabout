@@ -4,12 +4,19 @@ extends Node2D
 ## Entities. Tiles and layouts are authored in code for the prototype
 ## (deviation from painted tilemaps — see README); the structure matches
 ## the GDD so painted maps can replace these later without system changes.
+##
+## ROOM LOOP: each map owns a RoomController. Doors authored with add_gate() are
+## locked on entry and open when the room's mobs (declared via add_mob_spawner)
+## are all defeated. A cleared room persists in WorldState; on re-entry its
+## spawners stay silent and its gates start open (backtracking model B). Set
+## is_final = true on the last room — clearing it wins the run.
 
 const T := 32
 
 static var _tileset: TileSet
 
 @export var map_id := ""
+@export var is_final := false       ## clearing this room ends the run (the leaf)
 var bounds := Rect2()
 var size_tiles := Vector2i(30, 17)
 
@@ -18,6 +25,8 @@ var walls: TileMapLayer
 var entities: Node2D
 var exits: Node2D
 var spawn_points := {}   # { spawn_id: Vector2 (global px) }
+
+var _room: RoomController
 
 func _ready() -> void:
 	ground = TileMapLayer.new()
@@ -39,11 +48,27 @@ func _ready() -> void:
 	exits.name = "Exits"
 	add_child(exits)
 
+	_room = RoomController.new()
+	_room.name = "RoomController"
+	add_child(_room)
+
 	_build()
+
+	# is_final is read AFTER _build, so a room can set it in script (the robust
+	# source of truth) rather than depending on the scene file carrying it.
+	# Mob counts were registered synchronously in _build, so finalize is safe
+	# even though the mobs themselves spawn deferred.
+	_room.is_final = is_final
+	_room.finalize(MapManager.current_map_id if MapManager.current_map_id != "" else map_id)
 
 ## Override in concrete maps.
 func _build() -> void:
 	pass
+
+## Debug failsafe (dev.gd): force this room open (e.g. if a mob is unreachable).
+func force_clear_room() -> void:
+	if _room:
+		_room.force_clear()
 
 # ------------------------------------------------------------------- helpers
 
@@ -90,6 +115,74 @@ func place(id: String, tile: Vector2, persist_id := "") -> Node:
 	entities.add_child(n)
 	return n
 
+## A lockable, room-gated door. tile_rect is the doorway footprint (in tiles).
+## Registered with the RoomController so it locks/opens with the room.
+func add_gate(tile_rect: Rect2, target_map: String, target_spawn: String) -> Gate:
+	var g := Gate.new()
+	g.target_map_id = target_map
+	g.target_spawn_id = target_spawn
+	g.position = tile_rect.position * T + tile_rect.size * T * 0.5
+	g.size_px = tile_rect.size * T
+	exits.add_child(g)
+	if _room:
+		_room.register_gate(g)
+	return g
+
+## Carve a doorway in the border wall on a given side and drop a gated door in
+## it, plus a spawn point just inside (where the player lands when arriving
+## through this door from the neighbouring room).
+##   side  : "N" / "S" / "W" / "E"
+##   along : start tile along that edge (x for N/S, y for W/E)
+##   length: gap width in tiles (2 is a comfortable doorway)
+##   target_map / target_spawn : where this door leads
+##   spawn_id  : the local spawn the *neighbour* aims at to arrive here
+func add_door(side: String, along: int, length: int, target_map: String,
+		target_spawn: String, spawn_id: String, inset := 2) -> void:
+	var w := size_tiles.x
+	var h := size_tiles.y
+	var rect := Rect2()
+	var spawn_tile := Vector2.ZERO
+	var mid := along + length * 0.5 - 0.5
+	match side:
+		"N":
+			for i in length: clear_wall(Vector2i(along + i, 0))
+			rect = Rect2(Vector2(along, 0), Vector2(length, 1))
+			spawn_tile = Vector2(mid, inset)
+		"S":
+			for i in length: clear_wall(Vector2i(along + i, h - 1))
+			rect = Rect2(Vector2(along, h - 1), Vector2(length, 1))
+			spawn_tile = Vector2(mid, h - 1 - inset)
+		"W":
+			for i in length: clear_wall(Vector2i(0, along + i))
+			rect = Rect2(Vector2(0, along), Vector2(1, length))
+			spawn_tile = Vector2(inset, mid)
+		"E":
+			for i in length: clear_wall(Vector2i(w - 1, along + i))
+			rect = Rect2(Vector2(w - 1, along), Vector2(1, length))
+			spawn_tile = Vector2(w - 1 - inset, mid)
+		_:
+			push_error("add_door: bad side '%s'" % side)
+			return
+	add_gate(rect, target_map, target_spawn)
+	add_spawn(spawn_id, spawn_tile)
+
+## A mob spawner that respects room-clear persistence. On a cleared room it is
+## skipped entirely (no respawns on backtrack); otherwise its count is declared
+## to the RoomController so the room knows how many kills equal "cleared".
+func add_mob_spawner(id: String, tile: Vector2, count := 1, spread := 48.0) -> void:
+	if WorldState.is_room_cleared(MapManager.current_map_id):
+		return
+	if _room:
+		_room.register_expected(count)
+	var s := MobSpawner.new()
+	s.mob_id = id
+	s.count = count
+	s.spread = spread
+	s.position = tile * T + Vector2(T, T) * 0.5
+	entities.add_child(s)
+
+## Legacy unlocked exit (used by the original prototype maps). Always passable;
+## not registered with the RoomController. Prefer add_gate for run rooms.
 func add_exit(tile_rect: Rect2, target_map: String, target_spawn: String,
 		auto := true) -> ExitArea:
 	var e := ExitArea.new()
@@ -120,6 +213,15 @@ func add_building(tile_rect: Rect2i, door_tile: Vector2i, interior_map: String,
 	add_child(roof)
 	# Door → interior (interact-triggered, §8.3).
 	add_exit(Rect2(Vector2(door_tile), Vector2.ONE), interior_map, "default", false)
+
+## A solid decorative wall block of segments (no door). Handy for carving up a
+## room into chambers/cover without a full building. Segments are destructible
+## props like any other wall_segment.
+func add_wall_run(cells: Array, wall_id: String, id_prefix: String) -> void:
+	var idx := 0
+	for c in cells:
+		place(wall_id, c, "%s_block_%d" % [id_prefix, idx])
+		idx += 1
 
 # ------------------------------------------------------------ runtime tileset
 

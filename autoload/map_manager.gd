@@ -4,6 +4,18 @@ extends Node
 ## sorting against trees/props works.
 
 const MAPS := {
+	# --- The run: 10 handcrafted rooms, room_01 start → room_10 final (leaf).
+	"room_01": "res://maps/room_01.tscn",
+	"room_02": "res://maps/room_02.tscn",
+	"room_03": "res://maps/room_03.tscn",
+	"room_04": "res://maps/room_04.tscn",
+	"room_05": "res://maps/room_05.tscn",
+	"room_06": "res://maps/room_06.tscn",
+	"room_07": "res://maps/room_07.tscn",
+	"room_08": "res://maps/room_08.tscn",
+	"room_09": "res://maps/room_09.tscn",
+	"room_10": "res://maps/room_10.tscn",
+	# --- Legacy prototype maps (not part of the run; kept for reference/debug).
 	"overworld_a": "res://maps/overworld_a.tscn",
 	"overworld_b": "res://maps/overworld_b.tscn",
 	"interior_house_a": "res://maps/interior_house_a.tscn",
@@ -43,7 +55,8 @@ func change_map(map_id: String, spawn_id := "default") -> void:
 
 func respawn_player() -> void:
 	# D6: fade, respawn at current map's default spawn, full HP, mobs reset
-	# (the whole map reloads; spawners re-arm, destruction persists via WorldState).
+	# (the whole map reloads; spawners re-arm UNLESS the room is already cleared,
+	# destruction persists via WorldState). Death keeps run score/coins.
 	if _busy:
 		return
 	var player := get_tree().get_first_node_in_group("player")

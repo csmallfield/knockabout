@@ -1,13 +1,14 @@
 extends CanvasLayer
-## HUD (GDD §10 + scoring/loot §7). Reads ONLY EventBus + ScoreManager signals,
-## so the player/score systems never need a reference to UI. Reuses the existing
-## StyleBoxFlat bar approach.
+## HUD (GDD §10 + scoring/loot §7 + room loop). Reads ONLY EventBus +
+## ScoreManager signals, so the player/score/room systems never need a UI ref.
 
 var _hp_bar: ProgressBar
 var _power_bar: ProgressBar
 var _power_badge: Label
 var _score_label: Label
 var _coin_label: Label
+var _room_label: Label
+var _door_label: Label
 
 func _ready() -> void:
 	layer = 100
@@ -34,7 +35,17 @@ func _ready() -> void:
 	_coin_label.text = "Coins 0"
 	add_child(_coin_label)
 
+	_room_label = _make_label(Vector2(12, 102), 14)
+	_room_label.text = ""
+	add_child(_room_label)
+
+	_door_label = _make_label(Vector2(12, 122), 14)
+	_door_label.text = ""
+	add_child(_door_label)
+
 	EventBus.player_hp_changed.connect(_on_hp_changed)
+	EventBus.map_changed.connect(_on_map_changed)
+	EventBus.room_cleared.connect(_on_room_cleared)
 	ScoreManager.score_changed.connect(_on_score_changed)
 	ScoreManager.power_changed.connect(_on_power_changed)
 	ScoreManager.coins_changed.connect(_on_coins_changed)
@@ -79,3 +90,30 @@ func _on_power_changed(level: int, meter_ratio: float) -> void:
 
 func _on_coins_changed(total: int) -> void:
 	_coin_label.text = "Coins %d" % total
+
+func _on_map_changed(map_id: String) -> void:
+	_room_label.text = _pretty_room(map_id)
+	# Lock status is read from WorldState so backtracking into a cleared room
+	# shows "open" immediately (no signal-ordering games).
+	if WorldState.is_room_cleared(map_id):
+		_set_door_open(true)
+	else:
+		_set_door_open(false)
+
+func _on_room_cleared(_map_id: String) -> void:
+	_set_door_open(true)
+
+func _set_door_open(open: bool) -> void:
+	if open:
+		_door_label.text = "Doors OPEN — choose an exit"
+		_door_label.add_theme_color_override("font_color", Color(0.4, 0.9, 0.45))
+	else:
+		_door_label.text = "Doors LOCKED — defeat all enemies"
+		_door_label.add_theme_color_override("font_color", Color(0.95, 0.5, 0.45))
+
+func _pretty_room(map_id: String) -> String:
+	if map_id.begins_with("room_"):
+		var n := map_id.trim_prefix("room_").to_int()
+		if n > 0:
+			return "Room %d / 10" % n
+	return map_id

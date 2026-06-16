@@ -35,12 +35,13 @@ func _process(_delta: float) -> void:
 	for n in get_tree().get_nodes_in_group("ballistic"):
 		if n.has_method("is_ballistic") and n.is_ballistic():
 			ballistic += 1
-	_label.text = "FPS %d\nphysics bodies %d\nballistic actors %d\nlive debris %d\nimpacts this tick %d" % [
+	_label.text = "FPS %d\nphysics bodies %d\nballistic actors %d\nlive debris %d\nimpacts this tick %d\nmobs alive %d" % [
 		Engine.get_frames_per_second(),
 		Performance.get_monitor(Performance.PHYSICS_2D_ACTIVE_OBJECTS),
 		ballistic,
 		DebrisPool.live_count(),
 		ImpactResolver.impacts_this_tick,
+		get_tree().get_nodes_in_group("mobs").size(),
 	]
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -66,6 +67,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_toggle_collision_shapes()
 		KEY_F9:
 			_stress_test()
+		KEY_F10:
+			_force_clear_room()
 
 func _spawn_at_mouse(id: String) -> Node:
 	var map := MapManager.current_map
@@ -78,9 +81,23 @@ func _spawn_at_mouse(id: String) -> Node:
 	n.global_position = map.get_global_mouse_position()
 	return n
 
+## Kill all mobs by dealing lethal damage (NOT queue_free) so each death travels
+## the normal HealthComponent → Breakable → entity_died path. That keeps loot,
+## scoring AND the RoomController's kill count correct — a raw queue_free would
+## leave a gated room stuck "uncleared" forever.
 func _clear_mobs() -> void:
 	for m in get_tree().get_nodes_in_group("mobs"):
-		m.queue_free()
+		if m.has_method("take_impact_damage"):
+			m.take_impact_damage(1.0e9, null)
+		else:
+			m.queue_free()
+
+## Failsafe for a softlocked room (e.g. a mob wedged somewhere unreachable):
+## force the current room's doors open without needing the kills.
+func _force_clear_room() -> void:
+	var map := MapManager.current_map
+	if map and map.has_method("force_clear_room"):
+		map.force_clear_room()
 
 func _refill_player() -> void:
 	var player := get_tree().get_first_node_in_group("player")

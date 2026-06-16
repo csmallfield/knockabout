@@ -7,6 +7,11 @@ extends Node
 ## Decay runs in REAL time: FeedbackManager._hitstop sets Engine.time_scale to
 ## 0.05, so a naive _process(delta) decay would stall. We compute our own
 ## real-time delta from Time.get_ticks_msec(), the same trick _hitstop uses.
+##
+## RUN PERSISTENCE: score, power level and meter now CARRY across rooms within a
+## run (they no longer reset on map_changed). The power meter still fully resets
+## when the player takes a hit (decision 6A) and everything resets on reset_run()
+## at the start of a new run. Coins persist in WorldState as before.
 
 signal score_changed(score: float)
 signal power_changed(level: int, meter_ratio: float)
@@ -37,7 +42,7 @@ func _ready() -> void:
 	EventBus.entity_died.connect(_on_entity_died)
 	EventBus.player_damaged.connect(_on_player_damaged)
 	# map_changed fires (deferred) after the HUD has connected, so this is also
-	# our chance to push initial values onto a freshly-built HUD.
+	# our chance to (re)sync a freshly-built HUD with the current carried values.
 	EventBus.map_changed.connect(_on_map_changed)
 
 	_last_msec = Time.get_ticks_msec()
@@ -65,6 +70,17 @@ func multiplier() -> float:
 
 func fill_cost(level: int) -> float:
 	return _config.base_fill_cost * pow(_config.fill_cost_growth, level)
+
+## New-run wipe. Score, power and meter all reset (coins are reset by
+## WorldState.reset_run, called alongside this). Re-syncs the HUD.
+func reset_run() -> void:
+	score = 0.0
+	power_level = 0
+	meter = 0.0
+	_combo_timer = 0.0
+	score_changed.emit(score)
+	_emit_power()
+	coins_changed.emit(WorldState.get_coins())
 
 # ----------------------------------------------------------------- real-time decay
 
@@ -136,19 +152,16 @@ func _on_entity_died(entity: Node, _stats: PhysicsStats, _map_id: String) -> voi
 	_resolve_loot((entity as Node2D).global_position, mob.loot)
 
 func _on_player_damaged(_amount: float) -> void:
-	# Full reset to ×1, empty bar (decision 6A).
+	# Full reset to ×1, empty bar (decision 6A). Score is untouched — it carries.
 	power_level = 0
 	meter = 0.0
 	_combo_timer = 0.0
 	_emit_power()
 
 func _on_map_changed(_map_id: String) -> void:
-	# Run-local state resets; coins persist in WorldState. Also (re)seeds a
-	# freshly-built HUD with current values.
-	score = 0.0
-	power_level = 0
-	meter = 0.0
-	_combo_timer = 0.0
+	# Run state now CARRIES across rooms — we no longer zero score/power here.
+	# This handler's only job is to (re)sync the HUD with the carried values
+	# (and seed initial values on the first map load of a run).
 	score_changed.emit(score)
 	_emit_power()
 	coins_changed.emit(WorldState.get_coins())
