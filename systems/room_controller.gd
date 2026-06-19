@@ -6,12 +6,17 @@ extends Node
 ## counts mob deaths and flips gates.
 ##
 ## Counting, not polling: the map registers its expected mob total SYNCHRONOUSLY
-## during _build (MobSpawner spawns are deferred, so the live "mobs" group is
+## while loading (MobSpawner spawns are deferred, so the live "mobs" group is
 ## empty at that point — polling it would read "cleared" instantly). We tally
 ## EventBus.entity_died for mobs and compare against the declared total. Every
 ## mob death path routes through HealthComponent.died → Breakable → entity_died,
 ## so the count is reliable. (Debug F6 is routed through lethal damage for the
 ## same reason — see dev.gd.)
+##
+## Authored as a node in each room scene. It joins the "room_controller" group in
+## _enter_tree (which runs before any sibling's _ready), so gates and mob
+## spawners can find and register with it during their own _ready. MapBase then
+## calls finalize() in its _ready (after all children are ready).
 ##
 ## Backtracking model B: a cleared room persists its state in WorldState; on
 ## re-entry its spawners stay silent (expected == 0) and gates start open.
@@ -25,16 +30,20 @@ var _cleared := false
 var _armed := false     ## true once we've committed to gating this room
 var _map_id := ""
 
-## Called from MapBase.add_gate — register a door so we can lock/open it.
+func _enter_tree() -> void:
+	add_to_group("room_controller")
+
+## Called from Gate._ready — register a door so we can lock/open it.
 func register_gate(g: Gate) -> void:
 	_gates.append(g)
 
-## Called from MapBase.add_mob_spawner — declare how many mobs this room expects.
+## Called from MobSpawner._ready — declare how many mobs this room expects.
 ## Synchronous, so the total is correct before any deferred spawn lands.
 func register_expected(n: int) -> void:
 	_expected += maxi(n, 0)
 
-## Called by MapBase after _build(). Decides the room's starting state.
+## Called by MapBase after the authored nodes have registered. Decides the
+## room's starting state.
 func finalize(map_id: String) -> void:
 	_map_id = map_id
 	# Not a run room (no gated doors authored): stay completely inert so legacy

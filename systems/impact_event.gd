@@ -18,3 +18,6 @@ var swing_hits := 0                # # distinct enemies this player swing has hi
                                    # (via resolve_synthetic); 0 everywhere else (§2.6).
 var bypass_cooldown := false       # parry reflects: a new attack, not a duplicate
                                    # contact, so skip the pair-cooldown guard (§5.3).
+var static_restitution := -1.0     # per-tile bounce: ≥0 overrides Tuning.STATIC_RESTITUTION
+                                   # for a statless surface (read from the struck tile's
+                                   # "restitution" custom data). <0 ⇒ use the global default.

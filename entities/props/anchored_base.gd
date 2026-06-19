@@ -25,7 +25,12 @@ func _ready() -> void:
 	collision_layer = Tuning.L_WORLD
 	collision_mask = 0
 
-	if persist_id != "" and WorldState.is_destroyed(MapManager.current_map_id, persist_id):
+	# Editor-placed props leave persist_id blank: derive a stable key from the
+	# profile id + authored position so destruction persistence just works.
+	if persist_id == "":
+		persist_id = _derive_persist_id()
+
+	if WorldState.is_destroyed(MapManager.current_map_id, persist_id):
 		_spawn_variant_only()
 		return
 
@@ -56,6 +61,14 @@ func _spawn_variant_only() -> void:
 		v.position = position
 		get_parent().add_child.call_deferred(v)
 	queue_free()
+
+# ------------------------------------------------------------------- internals
+
+func _derive_persist_id() -> String:
+	var tag := "prop"
+	if profile and profile.resource_path != "":
+		tag = profile.resource_path.get_file().get_basename()
+	return "%s_%d_%d" % [tag, roundi(position.x), roundi(position.y)]
 
 # ------------------------------------------------------ PhysicsEntity duck-type
 

@@ -4,21 +4,10 @@ extends Node
 ## sorting against trees/props works.
 
 const MAPS := {
-	# --- The run: 10 handcrafted rooms, room_01 start → room_10 final (leaf).
+	# Authored rooms. Add room_02 … room_10 here as you build their scenes.
+	# (Vertical slice ships room_01 only; its gates loop back to itself.)
 	"room_01": "res://maps/room_01.tscn",
 	"room_02": "res://maps/room_02.tscn",
-	"room_03": "res://maps/room_03.tscn",
-	"room_04": "res://maps/room_04.tscn",
-	"room_05": "res://maps/room_05.tscn",
-	"room_06": "res://maps/room_06.tscn",
-	"room_07": "res://maps/room_07.tscn",
-	"room_08": "res://maps/room_08.tscn",
-	"room_09": "res://maps/room_09.tscn",
-	"room_10": "res://maps/room_10.tscn",
-	# --- Legacy prototype maps (not part of the run; kept for reference/debug).
-	"overworld_a": "res://maps/overworld_a.tscn",
-	"overworld_b": "res://maps/overworld_b.tscn",
-	"interior_house_a": "res://maps/interior_house_a.tscn",
 }
 
 var current_map_id := ""

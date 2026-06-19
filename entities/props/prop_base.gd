@@ -33,7 +33,12 @@ func _ready() -> void:
 	max_contacts_reported = 4
 	body_entered.connect(_on_body_entered)
 
-	if persist_id != "" and WorldState.is_destroyed(MapManager.current_map_id, persist_id):
+	# Editor-placed props leave persist_id blank: derive a stable key from the
+	# profile id + authored position so destruction persistence just works.
+	if persist_id == "":
+		persist_id = _derive_persist_id()
+
+	if WorldState.is_destroyed(MapManager.current_map_id, persist_id):
 		queue_free()
 		return
 
@@ -74,7 +79,20 @@ func _on_body_entered(body: Node) -> void:
 		ev.normal = -n   # from prop toward the surface ≈ travel direction
 		ev.contact_point = global_position
 		ev.rel_velocity = _prev_velocity
+		# Per-surface bounce: if we hit a painted tile, let its restitution speak.
+		# (Approximate — probe a point a body-radius into the travel direction.)
+		if body is TileMapLayer:
+			ev.static_restitution = ImpactResolver.tile_restitution_at(
+				body, global_position - n * radius)
 		ImpactResolver.resolve(ev)
+
+# ------------------------------------------------------------------- internals
+
+func _derive_persist_id() -> String:
+	var tag := "prop"
+	if profile and profile.resource_path != "":
+		tag = profile.resource_path.get_file().get_basename()
+	return "%s_%d_%d" % [tag, roundi(position.x), roundi(position.y)]
 
 # ------------------------------------------------------ PhysicsEntity duck-type
 

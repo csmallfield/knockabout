@@ -6,6 +6,13 @@ var _pair_times := {}              # { "idA_idB": last_resolve_time }
 var _tick := -1
 var impacts_this_tick := 0         # exposed for the debug overlay
 
+# Per-tile restitution: cache the "restitution" custom-data-layer index of the
+# (single, shared) room TileSet so the lookup is a hash + array read, not a
+# name scan, each collision. Degrades to STATIC_RESTITUTION if the layer is
+# absent (e.g. a tileset built before the migration).
+var _rest_layer_checked := false
+var _rest_layer_idx := -1
+
 # ------------------------------------------------------------------ public
 
 ## Main entry point. Resolves damage + momentum exchange for an ImpactEvent.
@@ -77,6 +84,10 @@ func resolve_kinematic(actor: Node, col: KinematicCollision2D, velocity: Vector2
 	var ev := ImpactEvent.new()
 	ev.body_a = actor
 	ev.body_b = other if _is_entity(other) else null
+	# Statless surface: if it's a painted tile, carry its per-tile restitution so
+	# a bouncy/dead wall reflects differently from the global default.
+	if ev.body_b == null:
+		ev.static_restitution = _tile_restitution(col)
 	ev.normal = -col.get_normal()          # from actor toward surface
 	ev.contact_point = col.get_position()
 	ev.rel_velocity = velocity - _vel(ev.body_b)
@@ -116,6 +127,11 @@ func resolve_body_pair(a: Node, b: Node, contact := Vector2.ZERO) -> void:
 	ev.rel_velocity = _vel(a) - _vel(b)
 	resolve(ev)
 
+## Per-surface restitution of the tile at a world position (for non-kinematic
+## contacts, e.g. a RigidBody prop hitting a wall). Returns -1 if no tile there.
+func tile_restitution_at(tml: TileMapLayer, world_pos: Vector2) -> float:
+	return _cell_restitution(tml, tml.get_cell_tile_data(tml.local_to_map(tml.to_local(world_pos))))
+
 # ----------------------------------------------------------------- private
 
 func _exchange(event: ImpactEvent) -> Array[Vector2]:
@@ -129,8 +145,8 @@ func _exchange(event: ImpactEvent) -> Array[Vector2]:
 	var vbn := vb.dot(n)
 	var vat := va - van * n
 	var vbt := vb - vbn * n
-	var ra: float = sa.restitution if sa else Tuning.STATIC_RESTITUTION
-	var rb: float = sb.restitution if sb else Tuning.STATIC_RESTITUTION
+	var ra: float = sa.restitution if sa else _surface_restitution(event)
+	var rb: float = sb.restitution if sb else _surface_restitution(event)
 	var e := (ra + rb) * 0.5   # combination strategy: average (open item §17)
 	var m_a: float = sa.mass if sa else INF
 	var m_b: float = sb.mass if sb else INF
@@ -150,6 +166,37 @@ func _exchange(event: ImpactEvent) -> Array[Vector2]:
 		vbt * Tuning.TANGENT_FRICTION + vbn2 * n,
 	]
 	return out
+
+## Restitution to use for a statless surface: the per-tile value carried on the
+## event if one was looked up, else the global default (§5, also covers
+## non-tile statics like the Gate's blocker StaticBody2D).
+func _surface_restitution(event: ImpactEvent) -> float:
+	return event.static_restitution if event.static_restitution >= 0.0 \
+		else Tuning.STATIC_RESTITUTION
+
+func _tile_restitution(col: KinematicCollision2D) -> float:
+	var tml := col.get_collider() as TileMapLayer
+	if tml == null:
+		return -1.0
+	var cell := tml.get_coords_for_body_rid(col.get_collider_rid())
+	return _cell_restitution(tml, tml.get_cell_tile_data(cell))
+
+func _cell_restitution(tml: TileMapLayer, td: TileData) -> float:
+	if td == null or tml.tile_set == null:
+		return -1.0
+	var idx := _restitution_layer(tml.tile_set)
+	if idx < 0:
+		return -1.0
+	return td.get_custom_data_by_layer_id(idx)
+
+func _restitution_layer(ts: TileSet) -> int:
+	if not _rest_layer_checked:
+		_rest_layer_checked = true
+		for i in ts.get_custom_data_layers_count():
+			if ts.get_custom_data_layer_name(i) == "restitution":
+				_rest_layer_idx = i
+				break
+	return _rest_layer_idx
 
 func _write_back(event: ImpactEvent, new_v: Array[Vector2],
 		skip_a: bool, skip_b: bool) -> void:

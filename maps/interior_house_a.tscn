@@ -1,7 +1,0 @@
-[gd_scene format=3 uid="uid://bp5q5g3fk7ocd"]
-
-[ext_resource type="Script" uid="uid://bowqjxxvrsxw5" path="res://maps/interior_house_a.gd" id="1"]
-
-[node name="InteriorHouseA" type="Node2D" unique_id=791238514]
-script = ExtResource("1")
-map_id = "interior_house_a"

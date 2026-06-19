@@ -1,22 +1,24 @@
+@tool
 class_name Gate
 extends Area2D
-## A lockable door (the §8.3 door, upgraded for the room-clear loop). It is
-## three things in one placeholder node:
-##   1. an Area2D trigger (L_INTERACT, sensing the player) that fires the map
-##      transition — but only while OPEN;
-##   2. a child StaticBody2D on L_WORLD that physically seals the doorway while
-##      LOCKED (so the player — and mobs — can't leave an uncleared room);
-##   3. a drawn placeholder bar that reads as a closed portcullis when locked
-##      and retracts + greens when open.
+## A lockable door (the §8.3 door, upgraded for the room-clear loop). Three
+## things in one placeholder node:
+##   1. an Area2D trigger (L_INTERACT) that fires the map transition — only while OPEN;
+##   2. a child StaticBody2D on L_WORLD that physically seals the doorway while LOCKED;
+##   3. a drawn placeholder bar (iron when shut, retracts/greens when open).
 ##
-## Each room owns its own gates; a door between rooms A and B is a Gate in A and
-## a separate Gate in B. Locking is therefore per-room: every gate in a room is
-## locked on entry-while-uncleared and opened together when the room clears
-## (RoomController drives this). No per-door bookkeeping is needed — room-clear
-## state lives in WorldState.
+## Now placed in the editor. The doorway is sized with `size_tiles`, positioned by
+## the node's transform, and the wall opening is simply unpainted wall tiles. On
+## load it finds the RoomController (group "room_controller") and registers, so it
+## locks on entry-while-uncleared and opens when the room clears.
 
 @export var target_map_id := ""
 @export var target_spawn_id := "default"
+@export var size_tiles := Vector2(1, 2):
+	set(v):
+		size_tiles = v
+		size_px = v * T
+		queue_redraw()
 
 var size_px := Vector2(T, T * 2.0)
 
@@ -29,6 +31,11 @@ var _art: GateArt
 var _anim: Tween
 
 func _ready() -> void:
+	size_px = size_tiles * T
+	if Engine.is_editor_hint():
+		queue_redraw()
+		return
+
 	# Trigger: senses the player, fires the transition (only while open).
 	collision_layer = Tuning.L_INTERACT
 	collision_mask = Tuning.L_PLAYER
@@ -48,7 +55,18 @@ func _ready() -> void:
 	add_child(_art)
 
 	body_entered.connect(_on_body_entered)
+
+	var room := get_tree().get_first_node_in_group("room_controller")
+	if room:
+		room.register_gate(self)
 	lock()   # gates default to locked; the RoomController opens them on clear
+
+func _draw() -> void:
+	# Editor-only footprint gizmo so you can place/size the doorway visually.
+	if not Engine.is_editor_hint():
+		return
+	draw_rect(Rect2(-size_px * 0.5, size_px), Color(0.8, 0.3, 0.3, 0.35))
+	draw_rect(Rect2(-size_px * 0.5, size_px), Color(0.8, 0.3, 0.3), false, 2.0)
 
 func lock() -> void:
 	_open = false

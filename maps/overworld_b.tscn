@@ -1,7 +1,0 @@
-[gd_scene format=3 uid="uid://dl4pu8gkona3t"]
-
-[ext_resource type="Script" uid="uid://cmvbhbs7xq3ig" path="res://maps/overworld_b.gd" id="1"]
-
-[node name="OverworldB" type="Node2D" unique_id=1298266449]
-script = ExtResource("1")
-map_id = "overworld_b"
