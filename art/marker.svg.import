@@ -1,0 +1,15 @@
+[remap]
+
+importer="motion_kit.svg"
+importer_version=2
+type="Resource"
+uid="uid://bo3elit53bnjr"
+path="res://.godot/imported/marker.svg-d859126a6e76252469b0cd826c65c5ae.res"
+
+[deps]
+
+source_file="res://art/marker.svg"
+dest_files=["res://.godot/imported/marker.svg-d859126a6e76252469b0cd826c65c5ae.res"]
+
+[params]
+

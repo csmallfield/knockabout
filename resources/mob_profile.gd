@@ -18,6 +18,15 @@ extends Resource
 @export var radius := 10.0
 @export var color := Color(0.35, 0.8, 0.3)
 
+@export_group("Puppet")
+## The hero puppet recoloured for this mob (Puppets bakes it at boot). Skin
+## takes `color` unless set here; hair and clothes derive from it.
+@export var puppet_skin := Color(0, 0, 0, 0)
+@export var puppet_hair := Color(0, 0, 0, 0)
+@export var puppet_cloth := Color(0, 0, 0, 0)
+## Puppet height as a multiple of the body radius.
+@export var puppet_height := 3.4
+
 @export_group("Rewards")
 @export var point_value := 10.0   ## > 0 ⇒ pays score on death (props leave it 0)
 @export var loot: LootTable       ## null ⇒ no drops

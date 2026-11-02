@@ -13,7 +13,8 @@ var persist_id := ""   # unused; present for duck-type uniformity
 
 var _motion: BallisticMotion
 var _health: HealthComponent
-var _art: PlaceholderArt
+var _art: HeroPuppet
+var _smear: SwingSmear
 var _camera: Camera2D
 var _buff: BuffComponent
 
@@ -53,11 +54,11 @@ func _ready() -> void:
 	collision_mask = Tuning.L_WORLD | Tuning.L_ENEMY | Tuning.L_PROP
 	add_child(EntityKit.circle_collider(profile.body_radius))
 
-	_art = PlaceholderArt.new()
-	_art.color = profile.color
-	_art.radius = profile.body_radius
-	_art.show_facing = true
+	_smear = SwingSmear.new()
+	add_child(_smear)
+	_art = HeroPuppet.new()
 	add_child(_art)
+	_art.setup_hero(self)
 
 	_motion = BallisticMotion.new()
 	_motion.setup(self, stats)
@@ -145,6 +146,7 @@ func _physics_process(delta: float) -> void:
 		_cancel_charge()
 
 	_motion.physics_update(intent, delta)
+	_art.set_motion(_motion.state, _motion.current_velocity())
 	_update_swing(delta)
 	_update_visuals()
 
@@ -264,6 +266,7 @@ func _start_swing() -> void:
 	var half := deg_to_rad(weapon.arc_degrees) * 0.5
 	_weapon_pivot.rotation = facing.angle() - _swing_sign * half
 	_swing_hitbox.monitoring = true
+	_smear.begin(_weapon_pivot.rotation, weapon.range_px)
 
 func _update_swing(delta: float) -> void:
 	if _swing_frames_left <= 0:
@@ -279,6 +282,7 @@ func _update_swing(delta: float) -> void:
 	var p := 1.0 - float(_swing_frames_left) / float(_swing_total_frames)
 	var half := deg_to_rad(weapon.arc_degrees) * 0.5
 	_weapon_pivot.rotation = facing.angle() + _swing_sign * lerpf(-half, half, p)
+	_smear.reach(_weapon_pivot.rotation)
 	for area in _swing_hitbox.get_overlapping_areas():
 		var entity := EntityKit.hurtbox_entity(area)
 		if entity == null or entity == self or _swing_hits.has(entity.get_instance_id()):
@@ -299,6 +303,25 @@ func _update_swing(delta: float) -> void:
 func is_attacking() -> bool:
 	return _swing_frames_left > 0
 
+# --- read by the puppet ---
+
+## The club pivot's angle (radians, screen space): the swing arc and its hitbox.
+func weapon_angle() -> float:
+	return _weapon_pivot.rotation
+
+func is_charging() -> bool:
+	return _charging
+
+func is_blocking() -> bool:
+	return _blocking
+
+func charge_ratio() -> float:
+	return _charge_ratio()
+
+## 0..1 through a roll, -1 when not rolling.
+func roll_progress() -> float:
+	return 1.0 - _roll_timer / profile.roll_duration if _roll_timer > 0.0 else -1.0
+
 func _build_weapon() -> Node2D:
 	var pivot := Node2D.new()
 	pivot.name = "WeaponPivot"
@@ -306,6 +329,7 @@ func _build_weapon() -> Node2D:
 	var base := maxf(tip - weapon.blade_length, 8.0)
 
 	var art := WeaponArt.new()
+	art.visible = false        # the puppet's sword shows the weapon now; this stays as the debug spec
 	art.blade_base = base
 	art.blade_tip = tip
 	art.color = weapon.color
@@ -337,6 +361,45 @@ class WeaponArt:
 			color, shaft_width)
 		draw_circle(Vector2(blade_tip - head_radius + 2.0, 0), head_radius,
 			color.darkened(0.2))
+
+## The swing's smear: a crescent from where the swing started to where the
+## pivot is now, fading out after. Drawn under the puppet; the sword itself is
+## the puppet's (HeroPuppet puts the hand on this same arc).
+class SwingSmear:
+	extends Node2D
+	var from := 0.0
+	var to := 0.0
+	var radius := 25.0
+	var life := 0.0
+
+	func begin(angle: float, r: float) -> void:
+		from = angle
+		to = angle
+		radius = r
+		life = 1.0
+		queue_redraw()
+
+	func reach(angle: float) -> void:
+		to = angle
+		life = 1.0
+		queue_redraw()
+
+	func _process(delta: float) -> void:
+		if life > 0.0:
+			life = maxf(life - delta * 7.0, 0.0)
+			queue_redraw()
+
+	func _draw() -> void:
+		if life <= 0.0 or absf(to - from) < 0.01:
+			return
+		var n := 14
+		var col := Color(1.0, 0.98, 0.9, 0.55 * life)
+		for i in n:
+			var t0 := float(i) / n
+			var t1 := float(i + 1) / n
+			var w := 1.0 + 5.0 * t1
+			draw_line(Vector2.from_angle(lerpf(from, to, t0)) * radius * 0.95,
+				Vector2.from_angle(lerpf(from, to, t1)) * radius * 0.95, col, w)
 
 ## A drawn frontal guard arc, shown while blocking; brighter in the parry window.
 class BlockShield:
@@ -425,20 +488,20 @@ func _update_visuals() -> void:
 		_block_shield.queue_redraw()
 
 	if _buff.is_active(LootProfile.Kind.INVINCIBLE):
-		_art.modulate = Color(1.0, 0.9, 0.35)
-		_art.modulate.a = 0.55 if (int(Time.get_ticks_msec() / 60.0) % 2 == 0) else 1.0
+		_art.tint = Color(1.0, 0.9, 0.35)
+		_art.tint.a = 0.55 if (int(Time.get_ticks_msec() / 60.0) % 2 == 0) else 1.0
 		return
 	if _iframes > 0.0:
-		_art.modulate = Color.WHITE
-		_art.modulate.a = 0.5 if (int(_iframes * 20.0) % 2 == 0) else 1.0
+		_art.tint = Color.WHITE
+		_art.tint.a = 0.5 if (int(_iframes * 20.0) % 2 == 0) else 1.0
 		return
 	var base := Color.WHITE
 	if _blocking:
 		base = Color(0.7, 0.95, 1.0) if _is_parrying() else Color(0.6, 0.75, 0.95)
 	elif _charging:
 		base = Color.WHITE.lerp(Color(1.0, 0.75, 0.3), _charge_ratio())
-	_art.modulate = base
-	_art.modulate.a = 1.0
+	_art.tint = base
+	_art.tint.a = 1.0
 
 # ---------------------------------------------------------- damage loop (D6)
 
@@ -486,6 +549,7 @@ func get_impact_velocity() -> Vector2:
 	return _motion.current_velocity()
 
 func apply_impact_result(new_velocity: Vector2) -> void:
+	_art.impact(new_velocity - get_impact_velocity())
 	# I-frames block damage only — knockback/launch still applies (§6.3).
 	# INVINCIBLE blocks launch/knockback for its duration (8A).
 	if _buff.is_active(LootProfile.Kind.INVINCIBLE):

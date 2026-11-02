@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 40">
+  <!-- Ground ring under the hero's feet, so the hero reads in a crowd of
+       recoloured copies. Baked without an outline. -->
+  <path class="flat" fill="#ffd65a" fill-opacity="0.8" fill-rule="evenodd"
+    d="M6 20 A44 15 0 1 0 94 20 A44 15 0 1 0 6 20 Z M11 20 A39 11 0 1 0 89 20 A39 11 0 1 0 11 20 Z"/>
+</svg>

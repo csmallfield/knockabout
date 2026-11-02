@@ -1,0 +1,15 @@
+[remap]
+
+importer="motion_kit.svg"
+importer_version=2
+type="Resource"
+uid="uid://dwfwne1sttafy"
+path="res://.godot/imported/shadow.svg-4076a5e16db270fb5e87020e23f1f7cb.res"
+
+[deps]
+
+source_file="res://art/shadow.svg"
+dest_files=["res://.godot/imported/shadow.svg-4076a5e16db270fb5e87020e23f1f7cb.res"]
+
+[params]
+

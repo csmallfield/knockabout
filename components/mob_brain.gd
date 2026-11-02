@@ -367,11 +367,20 @@ func _maybe_dodge() -> void:
 
 func _has_los(target_pos: Vector2) -> bool:
 	var space := _body.get_world_2d().direct_space_state
-	var ex: Array[RID] = [_body.get_rid()]
-	var q := PhysicsRayQueryParameters2D.create(
-		_body.global_position, target_pos, Tuning.L_WORLD, ex)
-	q.collide_with_areas = false
+	var q := _ray_query(Tuning.L_WORLD)
+	q.from = _body.global_position
+	q.to = target_pos
 	return space.intersect_ray(q).is_empty()
+
+## One reusable ray query (allocating one per ray was a measurable cost in crowds).
+var _ray: PhysicsRayQueryParameters2D
+func _ray_query(mask: int) -> PhysicsRayQueryParameters2D:
+	if _ray == null:
+		_ray = PhysicsRayQueryParameters2D.new()
+		_ray.collide_with_areas = false
+		_ray.exclude = [_body.get_rid()]
+	_ray.collision_mask = mask
+	return _ray
 
 # ------------------------------------------------------------ context steering
 
@@ -381,13 +390,12 @@ func _update_danger() -> void:
 	var mask := Tuning.L_WORLD
 	if brain.avoid_props:
 		mask |= Tuning.L_PROP
-	var ex: Array[RID] = [_body.get_rid()]
+	var q := _ray_query(mask)
+	q.from = origin
 	var raw := PackedFloat32Array()
 	raw.resize(SLOT_COUNT)
 	for i in SLOT_COUNT:
-		var q := PhysicsRayQueryParameters2D.create(
-			origin, origin + _slots[i] * _look_ahead, mask, ex)
-		q.collide_with_areas = false
+		q.to = origin + _slots[i] * _look_ahead
 		var hit := space.intersect_ray(q)
 		if hit.is_empty():
 			raw[i] = 0.0
@@ -438,15 +446,9 @@ func _steer(goals: Array, speed: float, delta: float) -> Vector2:
 	return _heading * speed
 
 func _separation_goals() -> Array:
-	var here := _body.global_position
-	var push := Vector2.ZERO
-	for m in _owner.get_tree().get_nodes_in_group("mobs"):
-		if m == _owner or not is_instance_valid(m):
-			continue
-		var d: Vector2 = here - (m as Node2D).global_position
-		var dist := d.length()
-		if dist > 0.01 and dist < brain.separation_radius:
-			push += d / dist * (1.0 - dist / brain.separation_radius)
+	# Neighbours come from a shared spatial hash (MobGrid), not a scan of
+	# every mob: the scan was n² per tick and dominated large crowds.
+	var push := MobGrid.separation(_owner.get_tree(), _body.global_position, brain.separation_radius)
 	if push.length() > 0.001:
 		return [{"dir": push.normalized(), "weight": brain.separation_weight}]
 	return []
