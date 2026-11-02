@@ -91,7 +91,9 @@ because the brain's separation used to scan every mob for every mob (n² per tic
 `components/mob_grid.gd` now shares one spatial hash per tick, and the brain reuses one
 ray query instead of allocating one per ray. What's left at 120 mobs is mostly the brain
 (perception raycasts and context steering, about 5 ms here) and `move_and_slide`
-(about 4 ms). Measure on your machine before tuning further.
+(about 4 ms). Measure on your machine before tuning further. The plan for going further (AI level of
+detail, a data-oriented crowd core, native code) is in
+[docs/HANDOFF_performance.md](docs/HANDOFF_performance.md).
 
 ## Controls
 
