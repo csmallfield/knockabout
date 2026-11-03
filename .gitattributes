@@ -1,2 +1,3 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Godot writes LF everywhere; keep the working copy LF on every platform
+# so the editor touching a file never shows up as a change.
+* text=auto eol=lf
