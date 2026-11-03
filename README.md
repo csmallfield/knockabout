@@ -29,14 +29,41 @@ Duplicate ids across folders are rejected at boot with an error.
 
 ## Running it
 
-1. Install **Godot 4.6.x** (standard build, no .NET needed).
-2. Link the Godot Motion Kit (the puppets use its 2D cutout rig):
-   `tools/setup.sh` (Linux / macOS) or `.\tools\setup.ps1` (Windows). It fetches the
-   `vendor/godot-motion-kit` submodule and links its addon into `addons/motion_kit`. The kit
-   is private for now, so this needs access to it. To work against your own kit checkout:
+1. Install **Godot 4.6 or newer** (standard build, no .NET needed).
+2. Run the setup script **before opening the project in Godot for the first time** on
+   each machine:
+
+   ```
+   tools/setup.sh          # Linux / macOS
+   .\tools\setup.ps1       # Windows (PowerShell)
+   ```
+
+   The puppets use the Godot Motion Kit's 2D cutout rig. The script fetches the
+   `vendor/godot-motion-kit` submodule and links its addon into `addons/motion_kit`
+   (a symlink, or a directory junction on Windows, so no admin rights are needed).
+   `addons/motion_kit` is gitignored, which is why this is a per-clone step rather than
+   something git brings across. The kit is private for now, so this needs access to it.
+   To work against your own kit checkout instead of the submodule:
    `KITS_DIR=~/dev tools/setup.sh` or `.\tools\setup.ps1 -KitsDir C:\dev`.
 3. Open the Project Manager → **Import** → select this folder's `project.godot`.
 4. Press **F5** (Run Project). Main scene is `game.tscn`.
+
+### If you opened the project before running setup
+
+Without the addon, Godot fails to compile every puppet script (`Could not resolve class
+"Puppet"`, `Identifier "MotionCutoutRig2D" not declared`, and so on), reports that
+`res://addons/motion_kit/plugin.cfg` failed to load, and silently rewrites the
+`art/*.svg.import` files to use the plain texture importer instead of the kit's SVG
+importer. Running setup afterwards is not enough on its own: the SVGs must also be
+restored to the kit importer, otherwise the puppet atlas can't bake. Do both:
+
+```
+.\tools\setup.ps1                 # or tools/setup.sh
+git checkout -- art/*.svg.import
+```
+
+Then reopen the project. Godot re-imports the SVGs with the motion kit importer on the
+first open.
 
 ## Puppets
 
