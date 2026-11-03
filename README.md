@@ -1,7 +1,8 @@
 # KNOCKABOUT — Prototype
 
-Top-down physics-driven Zelda-like ARPG prototype, built to the GDD. Everything
-visible is placeholder art (colored circles/rects, runtime-generated tiles);
+Top-down physics-driven Zelda-like ARPG prototype, built to the GDD. The player and
+mobs are 2D cutout puppets (see Puppets below); the rest is placeholder art (colored
+circles/rects, runtime-generated tiles);
 all the interesting work is in the impact pipeline and the data-driven
 content framework.
 
@@ -29,10 +30,70 @@ Duplicate ids across folders are rejected at boot with an error.
 ## Running it
 
 1. Install **Godot 4.6.x** (standard build, no .NET needed).
-2. Open the Project Manager → **Import** → select this folder's `project.godot`.
-3. Press **F5** (Run Project). Main scene is `game.tscn`.
+2. Link the Godot Motion Kit (the puppets use its 2D cutout rig):
+   `tools/setup.sh` (Linux / macOS) or `.\tools\setup.ps1` (Windows). It fetches the
+   `vendor/godot-motion-kit` submodule and links its addon into `addons/motion_kit`. The kit
+   is private for now, so this needs access to it. To work against your own kit checkout:
+   `KITS_DIR=~/dev tools/setup.sh` or `.\tools\setup.ps1 -KitsDir C:\dev`.
+3. Open the Project Manager → **Import** → select this folder's `project.godot`.
+4. Press **F5** (Run Project). Main scene is `game.tscn`.
 
-No external assets, no plugins, no import step beyond Godot's first scan.
+## Puppets
+
+The player and every mob are 2D cutout puppets: the Cutout Isle hero drawings
+(`art/hero_front|back|side.svg`) baked by the motion kit's `MotionCutoutAtlas` into one
+texture at boot (`autoload/puppets.gd`), each drawn by a `MotionCutoutRig2D`.
+
+- **Hero** (`entities/puppet/hero_puppet.gd`): four directions with the sword always in the
+  right hand (front and back never flip; facing left is the side drawing mirrored with
+  left and right swapped), a paper turn between views, walk cycle, and the sword hand on
+  IK riding the club pivot's actual swing arc, the same arc as the hitbox. The sword arm
+  draws in front of the body when the arc comes toward the camera. Charge leans in,
+  block raises the free arm, roll spins the body. A gold ground ring keeps the hero
+  readable in a crowd of copies; only the hero wears the scarf.
+- **Mobs** (`entities/puppet/mob_puppet.gd`): the hero recoloured per `MobProfile` at
+  bake time (skin from `color`, darker hair, muted complementary clothes; override with
+  the profile's Puppet group), sized by `radius × puppet_height`. A lite driver: walk,
+  wind-up and strike poses from the brain.
+- **Knock layer** (`entities/puppet/puppet.gd`, both): read straight off `BallisticMotion`.
+  Launched bodies hop and tumble with their speed, limbs trail the velocity and flail,
+  impacts squash, stunned bodies lie tilted and wobble, corpses topple and fade.
+- **Purely visual.** The circle collider is still the body; physics is unchanged.
+- **LOD.** Off screen: no posing. Launched, stunned, hit, dying, winding up or striking:
+  every frame. Otherwise every frame up to 24 puppets, every 2nd up to 60, every 3rd
+  beyond (at most every 2nd within 140 px of the player), staggered, with the skipped
+  time carried into the next pose.
+
+Everything shares one texture and one material, so the crowd batches: 40 mobs and the
+room drew in about 100 draw calls under the Compatibility renderer.
+
+`godot --path . -- --pose-sheet` drives the hero through every facing, swing, block,
+roll and charge and saves a strip of crops to `user://pose_sheet.png`.
+
+## Crowd bench
+
+`godot --headless --path . --fixed-fps 60 -- --bench --mobs=120 [--bench-time=15]`
+spawns N mobs round the player (topped up as they die), keeps the player alive and
+swinging, and prints CPU time per frame and puppet posing cost. `--no-pose` freezes the
+puppets to isolate their cost. Headless numbers are CPU cost only, never frame rate.
+
+On the 2-core cloud CPU these were measured on (wall ms per frame, all CPU work):
+
+| Mobs | Before (circles) | Now (puppets + MobGrid) | Puppet posing |
+| --- | --- | --- | --- |
+| 20 | 3.3 | 3.9 | 0.6 |
+| 60 | 10.2 | 8.7 | 1.1 |
+| 120 | 24.4 | 17.7 | 1.9 |
+| 200 | 41.9 | 30.8 | 2.8 |
+
+The puppets cost about 33 µs per pose. They come out net faster from 60 mobs up
+because the brain's separation used to scan every mob for every mob (n² per tick);
+`components/mob_grid.gd` now shares one spatial hash per tick, and the brain reuses one
+ray query instead of allocating one per ray. What's left at 120 mobs is mostly the brain
+(perception raycasts and context steering, about 5 ms here) and `move_and_slide`
+(about 4 ms). Measure on your machine before tuning further. The plan for going further (AI level of
+detail, a data-oriented crowd core, native code) is in
+[docs/HANDOFF_performance.md](docs/HANDOFF_performance.md).
 
 ## Controls
 

@@ -22,7 +22,7 @@ var face_dir := Vector2.DOWN   # set by the brain; applied to the art each tick
 
 var _motion: BallisticMotion
 var _health: HealthComponent
-var _art: PlaceholderArt
+var _art: MobPuppet
 var _brain: MobBrain
 var _contact_zone: Area2D
 var _hp_bar: MiniHealthBar
@@ -44,11 +44,9 @@ func _ready() -> void:
 	collision_mask = Tuning.L_WORLD | Tuning.L_PLAYER | Tuning.L_ENEMY | Tuning.L_PROP
 	add_child(EntityKit.circle_collider(radius))
 
-	_art = PlaceholderArt.new()
-	_art.color = color
-	_art.radius = radius
-	_art.show_facing = true
+	_art = MobPuppet.new()
 	add_child(_art)
+	_art.setup_mob(self)
 
 	_motion = BallisticMotion.new()
 	_motion.setup(self, stats)
@@ -97,6 +95,7 @@ func _physics_process(delta: float) -> void:
 		# Corpse: brain is silent, but keep driving motion so a launched body
 		# finishes its arc (decaying via drag) instead of freezing in place.
 		_motion.physics_update(Vector2.ZERO, delta)
+		_art.set_motion(_motion.state, _motion.current_velocity())
 		return
 	var intent := Vector2.ZERO
 	if _motion.is_controllable():
@@ -106,6 +105,7 @@ func _physics_process(delta: float) -> void:
 	_art.facing = face_dir
 	_refresh_visual()
 	_motion.physics_update(intent, delta)
+	_art.set_motion(_motion.state, _motion.current_velocity())
 
 ## Called by Breakable after entity_died is emitted (so scoring/loot already
 ## fired). The mob turns gray, lingers as a corpse, then fades out and frees —
@@ -128,10 +128,11 @@ func begin_death_sequence(_event: ImpactEvent) -> void:
 	if _hp_bar:
 		_hp_bar.visible = false
 
+	_art.die()
 	var t := create_tween()
-	t.tween_property(_art, "modulate", Color(0.45, 0.45, 0.5, 1.0), 0.12)
+	t.tween_property(_art, "tint", Color(0.55, 0.55, 0.6, 1.0), 0.12)
 	t.tween_interval(Tuning.CORPSE_LINGER)
-	t.tween_property(_art, "modulate:a", 0.0, Tuning.CORPSE_FADE)
+	t.tween_property(_art, "tint:a", 0.0, Tuning.CORPSE_FADE)
 	t.tween_callback(queue_free)
 
 ## The brain calls this during a STRIKE; deals one synthetic hit if the player
@@ -153,25 +154,32 @@ func try_strike() -> bool:
 func get_player() -> Node2D:
 	return get_tree().get_first_node_in_group("player") as Node2D
 
+## For the puppet: the brain's state and wind-up progress (0..1).
+func brain_state() -> int:
+	return _brain.state
+
+func windup_progress() -> float:
+	return _brain.windup_progress()
+
 func hp_ratio() -> float:
 	return _health.hp / _health.max_hp if _health.max_hp > 0.0 else 0.0
 
 func _refresh_visual() -> void:
 	# Stun/launch tints win when not AI-controllable.
 	if not _motion.is_controllable():
-		_art.modulate = Color(0.8, 0.8, 1.0) \
+		_art.tint = Color(0.8, 0.8, 1.0) \
 			if _motion.state == BallisticMotion.State.STUNNED else Color.WHITE
 		return
 	match _brain.state:
 		MobBrain.State.WINDUP:
 			# Ramp toward a warning orange so the player can read the swing.
-			_art.modulate = Color.WHITE.lerp(Color(1.0, 0.55, 0.2), _brain.windup_progress())
+			_art.tint = Color.WHITE.lerp(Color(1.0, 0.55, 0.2), _brain.windup_progress())
 		MobBrain.State.STRIKE:
-			_art.modulate = Color(1.0, 0.6, 0.3)
+			_art.tint = Color(1.0, 0.6, 0.3)
 		MobBrain.State.RECOVER:
-			_art.modulate = Color(0.7, 0.75, 1.0) if _brain.is_charge_stunned() else Color.WHITE
+			_art.tint = Color(0.7, 0.75, 1.0) if _brain.is_charge_stunned() else Color.WHITE
 		_:
-			_art.modulate = Color.WHITE
+			_art.tint = Color.WHITE
 
 # ------------------------------------------------------ PhysicsEntity duck-type
 
@@ -185,6 +193,7 @@ func get_impact_velocity() -> Vector2:
 	return _motion.current_velocity()
 
 func apply_impact_result(new_velocity: Vector2) -> void:
+	_art.impact(new_velocity - _motion.current_velocity())
 	_motion.apply_impact_result(new_velocity)
 
 func take_impact_damage(amount: float, event: ImpactEvent) -> void:

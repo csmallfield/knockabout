@@ -12,6 +12,10 @@ var _label: Label
 var _visible := false
 
 func _ready() -> void:
+	if Bench.requested():
+		add_child(Bench.new())
+	if OS.get_cmdline_user_args().has("--pose-sheet"):
+		add_child(PoseSheet.new())
 	if not OS.is_debug_build():
 		set_process(false)
 		set_process_unhandled_key_input(false)
